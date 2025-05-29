@@ -1,0 +1,34 @@
+{
+  "name": "sql-analyzer-pro",
+  "version": "1.0.0",
+  "description": "AI-powered SQL analysis tool with separated frontend and backend architecture",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev:server\" \"npm run dev:frontend\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:genkit": "cd server && npm run genkit:dev",
+    "build": "npm run build:server && npm run build:frontend",
+    "build:server": "cd server && npm run build",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "concurrently \"npm run start:server\" \"npm run start:frontend\"",
+    "start:server": "cd server && npm run start",
+    "start:frontend": "cd frontend && npm run start",
+    "install:all": "npm install && cd server && npm install && cd ../frontend && npm install",
+    "clean": "rm -rf node_modules server/node_modules frontend/node_modules server/dist frontend/.next",
+    "typecheck": "npm run typecheck:server && npm run typecheck:frontend",
+    "typecheck:server": "cd server && npm run typecheck",
+    "typecheck:frontend": "cd frontend && npm run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "workspaces": [
+    "frontend",
+    "server"
+  ],
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}
