@@ -23,9 +23,12 @@ export interface AnalysisError {
   chunkNumber?: number;
 }
 
+export type LlmModel = 'gemini' | 'openai';
+
 export interface AnalysisRequest {
   sqlCode: string;
   blockType: string;
+  model?: LlmModel;
 }
 
 export interface ReportGenerationRequest {

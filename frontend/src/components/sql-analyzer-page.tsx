@@ -25,7 +25,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CodeBlock } from "@/components/code-block";
 import { ApiClient, ApiError } from "@/lib/api-client";
 import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@shared/types/analysis";
-import type { ExplainSqlBlockOutput } from "@/ai/flows/explain-logic-rules"; 
+import type { ExplainSqlBlockOutput } from "@/ai/flows/explain-logic-rules";
 import type { ExtractTableInfoOutput, IdentifiedTable } from "@/ai/flows/extract-table-info";
 import type { SummarizeCodeBlockOutput } from "@/ai/flows/summarize-code-block";
 import { APP_NAME, BLOCK_TYPES, BlockTypeValue } from "@shared/constants";
@@ -158,7 +158,7 @@ const RenderOutputFlowText: React.FC<{ flowText: string | undefined }> = ({ flow
     if (match) {
       return { type: match[1], detail: match[2], raw: segment };
     }
-    return { type: "UNKNOWN", detail: segment, raw: segment }; 
+    return { type: "UNKNOWN", detail: segment, raw: segment };
   });
 
   const getBadgeVariant = (type: string): "default" | "secondary" | "outline" | "destructive" => {
@@ -167,7 +167,7 @@ const RenderOutputFlowText: React.FC<{ flowText: string | undefined }> = ({ flow
     if (upperType.includes("JOIN") || upperType.includes("FILTER") || upperType.includes("TRANSFORM") || upperType.includes("AGG") || upperType.includes("SORT") || upperType.includes("LOGIC") || upperType.includes("OPERATION") || upperType.includes("STEP")) return "outline";
     return "default";
   };
-  
+
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -203,7 +203,7 @@ const StructuredLogicRulesDisplay: React.FC<{ explanation: ExplainSqlBlockOutput
   } = explanation;
 
   const renderSection = (title: string, icon: React.ReactNode, content?: React.ReactNode, isEmpty?: boolean, emptyMessage?: string) => {
-    if (isEmpty && !content) { 
+    if (isEmpty && !content) {
       return (
         <Card className="shadow my-4 bg-card border-border/40">
           <CardHeader className="py-3 px-4">
@@ -231,7 +231,7 @@ const StructuredLogicRulesDisplay: React.FC<{ explanation: ExplainSqlBlockOutput
 
   return (
     <div className="space-y-2">
-      {chunkKeySummary && renderSection("Key Insights", <Wand2 size={20} />, 
+      {chunkKeySummary && renderSection("Key Insights", <Wand2 size={20} />,
         <p className="text-foreground leading-relaxed">{chunkKeySummary}</p>
       )}
 
@@ -264,7 +264,7 @@ const StructuredLogicRulesDisplay: React.FC<{ explanation: ExplainSqlBlockOutput
         ),
         !blockSummary
       )}
-      
+
       {renderSection("Procedural Control Flow", <ListTree size={20} />,
         proceduralControlFlow && proceduralControlFlow.length > 0 ? (
           <Accordion type="multiple" className="w-full">
@@ -505,7 +505,7 @@ const StructuredLogicRulesDisplay: React.FC<{ explanation: ExplainSqlBlockOutput
                     <li key={`dep-${i}`}>
                       <div className="font-medium">{dep.objectName} <span className="text-xs text-muted-foreground">({dep.objectType})</span></div>
                       {dep.usageContext && <div className="text-muted-foreground italic ml-1 text-xs"> {dep.usageContext}</div>}
-                       {dep.inferredPurpose && <div className="text-xs text-muted-foreground/80 pl-3"><em>Purpose: {dep.inferredPurpose}</em></div>}
+                      {dep.inferredPurpose && <div className="text-xs text-muted-foreground/80 pl-3"><em>Purpose: {dep.inferredPurpose}</em></div>}
                     </li>)}
                 </ul>
               </div>
@@ -580,7 +580,7 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ view, currentView, setV
       "w-full justify-start text-left h-10 px-3 py-2 rounded-md text-sm font-medium transition-colors",
       "text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent/20",
       currentView === view && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
-      !isSidebarOpen && "px-0 justify-center w-12" 
+      !isSidebarOpen && "px-0 justify-center w-12"
     )}
     title={!isSidebarOpen ? label : undefined}
   >
@@ -610,7 +610,7 @@ const UnifiedTableDisplay: React.FC<{ tableInfo: ExtractTableInfoOutput | undefi
     switch (role) {
       case "Source": return "default";
       case "Target": return "destructive";
-      case "SourceAndTarget": return "secondary"; 
+      case "SourceAndTarget": return "secondary";
       case "Mentioned": return "outline";
       default: return "outline";
     }
@@ -618,11 +618,11 @@ const UnifiedTableDisplay: React.FC<{ tableInfo: ExtractTableInfoOutput | undefi
 
   const getRoleIcon = (role: IdentifiedTable['primaryRole']) => {
     switch (role) {
-        case "Source": return <PackageSearch size={16} className="mr-1 text-primary" />;
-        case "Target": return <TargetIcon size={16} className="mr-1 text-destructive" />;
-        case "SourceAndTarget": return <Combine size={16} className="mr-1 text-secondary-foreground" />;
-        case "Mentioned": return <Network size={16} className="mr-1 text-muted-foreground" />;
-        default: return <Database size={16} className="mr-1 text-muted-foreground" />;
+      case "Source": return <PackageSearch size={16} className="mr-1 text-primary" />;
+      case "Target": return <TargetIcon size={16} className="mr-1 text-destructive" />;
+      case "SourceAndTarget": return <Combine size={16} className="mr-1 text-secondary-foreground" />;
+      case "Mentioned": return <Network size={16} className="mr-1 text-muted-foreground" />;
+      default: return <Database size={16} className="mr-1 text-muted-foreground" />;
     }
   }
 
@@ -670,7 +670,7 @@ const OverallScriptAnalysisDisplay: React.FC<{ payload: FullAnalysisPayload }> =
     const tableNames = new Set<string>();
     chunkAnalyses.forEach(chunk => {
       if (chunk.tableInfo && chunk.tableInfo.identifiedTables) {
-          chunk.tableInfo.identifiedTables.forEach(t => tableNames.add(t.name));
+        chunk.tableInfo.identifiedTables.forEach(t => tableNames.add(t.name));
       }
     });
     return Array.from(tableNames);
@@ -689,7 +689,7 @@ const OverallScriptAnalysisDisplay: React.FC<{ payload: FullAnalysisPayload }> =
           </CardContent>
         </Card>
       )}
-      
+
       <Card className="border-border/40 shadow bg-card">
         <CardHeader className="py-3 px-4">
           <CardTitle className="text-xl text-primary flex items-center gap-2"><ListTree size={22} />Chunk Breakdown</CardTitle>
@@ -735,13 +735,14 @@ const OverallScriptAnalysisDisplay: React.FC<{ payload: FullAnalysisPayload }> =
 export default function SqlAnalyzerPage() {
   const [sqlCode, setSqlCode] = React.useState<string>("");
   const [fileName, setFileName] = React.useState<string>("");
-  const [blockType, setBlockType] = React.useState<BlockTypeValue | undefined>(BLOCK_TYPES[3].value); 
+  const [blockType, setBlockType] = React.useState<BlockTypeValue | undefined>(BLOCK_TYPES[3].value);
+  const [model, setModel] = React.useState<'gemini' | 'openai'>('gemini');
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
-  
+
   const [fullAnalysisPayload, setFullAnalysisPayload] = React.useState<FullAnalysisPayload | null>(null);
   const [currentChunkIndex, setCurrentChunkIndex] = React.useState<number>(0);
   const [error, setError] = React.useState<AnalysisError | null>(null);
-  
+
   const [currentView, setCurrentView] = React.useState<AnalysisView>("summary");
   const [isSidebarOpen, setIsSidebarOpen] = React.useState(true);
   const [isRawCodePanelOpen, setIsRawCodePanelOpen] = React.useState(true);
@@ -786,39 +787,39 @@ export default function SqlAnalyzerPage() {
     setError(null);
     setFullAnalysisPayload(null);
     setCurrentChunkIndex(0);
-    
+
     try {
-      const result = await ApiClient.analyzeSQL({ sqlCode, blockType });
+      const result = await ApiClient.analyzeSQL({ sqlCode, blockType, model });
 
       if (result.chunkAnalyses.length > 0 || (result.overallScriptSummary && result.overallScriptSummary.trim() !== "" && result.overallScriptSummary !== "Overall script summary was not generated.")) {
         setFullAnalysisPayload(result);
         // Default to overall script view if available and multiple chunks, or if it's a script type that generated an overall summary
-        if (result.overallScriptSummary && result.overallScriptSummary.trim() !== "" && result.overallScriptSummary !== "Overall script summary was not generated." && (result.chunkAnalyses.length > 1 || (result.chunkAnalyses.length === 1 && blockType === "SQL Script")) ) {
+        if (result.overallScriptSummary && result.overallScriptSummary.trim() !== "" && result.overallScriptSummary !== "Overall script summary was not generated." && (result.chunkAnalyses.length > 1 || (result.chunkAnalyses.length === 1 && blockType === "SQL Script"))) {
           setCurrentView("overall_script");
         } else if (result.chunkAnalyses.length > 0) { // If no overall summary but chunks exist, default to first chunk's summary
           setCurrentView("summary");
         } else { // Fallback if overall summary is there but no chunks (should be rare)
-           setCurrentView("overall_script");
+          setCurrentView("overall_script");
         }
       } else {
-        setError({ error: "Analysis Incomplete", details: "No processable chunks or overall summary were found in the provided SQL."});
+        setError({ error: "Analysis Incomplete", details: "No processable chunks or overall summary were found in the provided SQL." });
         setFullAnalysisPayload(null);
       }
     } catch (error) {
       if (error instanceof ApiError) {
-        setError({ 
-          error: error.message, 
-          details: error.details 
+        setError({
+          error: error.message,
+          details: error.details
         });
       } else {
-        setError({ 
-          error: "Network Error", 
-          details: "Failed to connect to analysis server. Please ensure the server is running." 
+        setError({
+          error: "Network Error",
+          details: "Failed to connect to analysis server. Please ensure the server is running."
         });
       }
       setFullAnalysisPayload(null);
     }
-    
+
     setIsLoading(false);
   };
 
@@ -867,15 +868,15 @@ export default function SqlAnalyzerPage() {
     if (currentView === "overall_script" && (fullAnalysisPayload.overallScriptSummary && fullAnalysisPayload.overallScriptSummary.trim() !== "" && fullAnalysisPayload.overallScriptSummary !== "Overall script summary was not generated.")) {
       return <OverallScriptAnalysisDisplay payload={fullAnalysisPayload} />;
     }
-    
+
     if (!currentChunkData && currentView !== "overall_script") {
-        // If we expect chunk data but don't have it (and not in overall view)
-        if (fullAnalysisPayload.chunkAnalyses.length > 0) {
-            return <p className="text-muted-foreground p-4">Select a chunk to view its analysis.</p>;
-        }
-        return <p className="text-muted-foreground p-4">No chunk analysis data available for this view. Try the 'Overall Script' view if available.</p>;
+      // If we expect chunk data but don't have it (and not in overall view)
+      if (fullAnalysisPayload.chunkAnalyses.length > 0) {
+        return <p className="text-muted-foreground p-4">Select a chunk to view its analysis.</p>;
+      }
+      return <p className="text-muted-foreground p-4">No chunk analysis data available for this view. Try the 'Overall Script' view if available.</p>;
     }
-    
+
     if (!currentChunkData) return null; // Should be covered by above, but as a fallback
 
 
@@ -895,12 +896,12 @@ export default function SqlAnalyzerPage() {
             </CardHeader>
             <CardContent className="py-3 px-4">
               {currentChunkData.logicalFlowSteps && currentChunkData.logicalFlowSteps.flowSteps.length > 0 ? (
-                 <VisualFlowDisplay flowData={currentChunkData.logicalFlowSteps} />
+                <VisualFlowDisplay flowData={currentChunkData.logicalFlowSteps} />
               ) : (
                 <div className="mt-4 p-4 border border-dashed border-border rounded-lg bg-card/50">
                   <div className="text-muted-foreground text-sm flex items-center gap-2">
-                     <InfoIcon size={16} />
-                     No logical flow steps were generated for this chunk.
+                    <InfoIcon size={16} />
+                    No logical flow steps were generated for this chunk.
                   </div>
                 </div>
               )}
@@ -911,9 +912,9 @@ export default function SqlAnalyzerPage() {
         return null;
     }
   };
-  
-  const displayedRawCode = (currentView === "overall_script" && fullAnalysisPayload?.originalFullSqlCode) 
-    ? fullAnalysisPayload.originalFullSqlCode 
+
+  const displayedRawCode = (currentView === "overall_script" && fullAnalysisPayload?.originalFullSqlCode)
+    ? fullAnalysisPayload.originalFullSqlCode
     : currentChunkData?.rawCode;
 
   const rawCodeTitle = (currentView === "overall_script" && fullAnalysisPayload?.originalFullSqlCode)
@@ -957,7 +958,7 @@ export default function SqlAnalyzerPage() {
             <div className="grid sm:grid-cols-2 gap-6">
               <div className="grid gap-2">
                 <Label htmlFor="file-upload" className="text-sm font-medium text-foreground/90">Upload File (.sql, .txt)</Label>
-                 <div className="flex items-center">
+                <div className="flex items-center">
                   <Input
                     id="file-upload"
                     type="file"
@@ -981,6 +982,18 @@ export default function SqlAnalyzerPage() {
                         {type.label}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="model" className="text-sm font-medium text-foreground/90">Select AI Model</Label>
+                <Select value={model} onValueChange={(value: 'gemini' | 'openai') => setModel(value)}>
+                  <SelectTrigger id="model" className="w-full shadow-sm focus:ring-2 focus:ring-primary/50 border-input bg-background">
+                    <SelectValue placeholder="Select AI model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="openai">OpenAI</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1015,7 +1028,7 @@ export default function SqlAnalyzerPage() {
               {/* Sidebar */}
               <aside className={cn(
                 "lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out mb-6 lg:mb-0",
-                isSidebarOpen ? "lg:w-64" : "lg:w-[4.5rem]" 
+                isSidebarOpen ? "lg:w-64" : "lg:w-[4.5rem]"
               )}>
                 <Card className="shadow-md border-sidebar-border bg-sidebar h-full">
                   <CardHeader className="p-3 border-b border-sidebar-border/70 flex flex-row items-center justify-between">
@@ -1032,7 +1045,7 @@ export default function SqlAnalyzerPage() {
                   </CardHeader>
                   <CardContent className={cn("p-3 space-y-1.5 overflow-y-auto", !isSidebarOpen && "overflow-x-hidden")}>
                     {showOverallScriptNavItem && (
-                        <SidebarNavItem view="overall_script" currentView={currentView} setView={setCurrentView} label="Overall Script" icon={<FileType size={18} />} isSidebarOpen={isSidebarOpen} />
+                      <SidebarNavItem view="overall_script" currentView={currentView} setView={setCurrentView} label="Overall Script" icon={<FileType size={18} />} isSidebarOpen={isSidebarOpen} />
                     )}
                     <SidebarNavItem view="summary" currentView={currentView} setView={setCurrentView} label="Chunk Summary" icon={<AlignLeft size={18} />} isSidebarOpen={isSidebarOpen} />
                     <SidebarNavItem view="details" currentView={currentView} setView={setCurrentView} label="Chunk Deep Dive" icon={<SearchCode size={18} />} isSidebarOpen={isSidebarOpen} />
@@ -1058,34 +1071,34 @@ export default function SqlAnalyzerPage() {
                         {currentView === "tables" && "Chunk Table Analysis"}
                         {currentView === "visual_flow" && "Chunk SQL Visual Flow"}
                         {fullAnalysisPayload?.chunkAnalyses.length > 1 && currentView !== "overall_script" && currentChunkData && (
-                           <span className="text-base font-normal text-muted-foreground ml-2">(Chunk {currentChunkData.chunkNumber} of {currentChunkData.totalChunks})</span>
+                          <span className="text-base font-normal text-muted-foreground ml-2">(Chunk {currentChunkData.chunkNumber} of {currentChunkData.totalChunks})</span>
                         )}
                       </CardTitle>
                       <div className="flex items-center gap-2">
                         <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setIsRawCodePanelOpen(!isRawCodePanelOpen)}
-                            className="text-muted-foreground hover:text-primary hidden lg:flex"
-                            title={isRawCodePanelOpen ? "Hide Code Panel" : "Show Code Panel"}
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setIsRawCodePanelOpen(!isRawCodePanelOpen)}
+                          className="text-muted-foreground hover:text-primary hidden lg:flex"
+                          title={isRawCodePanelOpen ? "Hide Code Panel" : "Show Code Panel"}
                         >
-                            {isRawCodePanelOpen ? <PanelRightClose size={18} /> : <PanelLeftOpen size={18} />}
+                          {isRawCodePanelOpen ? <PanelRightClose size={18} /> : <PanelLeftOpen size={18} />}
                         </Button>
                         {currentView !== "overall_script" && currentChunkData && (
-                            <Button onClick={handleExportChunkReport} variant="outline" size="sm" className="ml-auto">
+                          <Button onClick={handleExportChunkReport} variant="outline" size="sm" className="ml-auto">
                             <Download size={16} className="mr-2" />
                             Export Chunk Report
-                            </Button>
+                          </Button>
                         )}
                         {currentView === "overall_script" && fullAnalysisPayload && (
-                            <Button onClick={handleExportFullReport} variant="outline" size="sm" className="ml-auto">
+                          <Button onClick={handleExportFullReport} variant="outline" size="sm" className="ml-auto">
                             <Download size={16} className="mr-2" />
                             Export Full Report
-                            </Button>
+                          </Button>
                         )}
                       </div>
                     </CardHeader>
-                    { fullAnalysisPayload.chunkAnalyses.length > 1 && currentView !== "overall_script" && (
+                    {fullAnalysisPayload.chunkAnalyses.length > 1 && currentView !== "overall_script" && (
                       <CardContent className="p-4 pt-0 flex items-center justify-start gap-2 sm:gap-4 border-b border-border/50">
                         <Button
                           onClick={() => setCurrentChunkIndex(prev => Math.max(0, prev - 1))}
@@ -1104,7 +1117,7 @@ export default function SqlAnalyzerPage() {
                           Next Chunk <ArrowRight size={16} className="ml-1 sm:ml-2" />
                         </Button>
                       </CardContent>
-                     )}
+                    )}
                     <CardContent className="p-4">
                       {renderAnalysisContent()}
                     </CardContent>
@@ -1113,7 +1126,7 @@ export default function SqlAnalyzerPage() {
 
                 {/* Raw Code Pane */}
                 {isRawCodePanelOpen && displayedRawCode && (
-                  <div className="min-w-0 lg:sticky lg:top-8 h-fit mt-6 lg:mt-0"> 
+                  <div className="min-w-0 lg:sticky lg:top-8 h-fit mt-6 lg:mt-0">
                     <Card className="shadow-md border-border/50 bg-card">
                       <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
                         <CardTitle className="text-xl text-primary flex items-center gap-2"><FileCode size={22} />
@@ -1123,7 +1136,7 @@ export default function SqlAnalyzerPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => setIsRawCodePanelOpen(!isRawCodePanelOpen)}
-                          className="text-muted-foreground hover:text-primary lg:hidden" 
+                          className="text-muted-foreground hover:text-primary lg:hidden"
                           title={isRawCodePanelOpen ? "Hide Code Panel" : "Show Code Panel"}
                         >
                           {isRawCodePanelOpen ? <PanelRightClose size={20} /> : <PanelLeftOpen size={20} />}
