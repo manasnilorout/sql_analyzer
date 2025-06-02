@@ -1,4 +1,5 @@
-export const APP_NAME = "SQL Analyzer Pro";
+export const COMPANY_NAME = "Bilvantis Technologies";
+export const APP_TITLE = "SQL Analyzer Pro";
 
 export const BLOCK_TYPES = [
   { value: "Stored Procedure", label: "Stored Procedure" },
