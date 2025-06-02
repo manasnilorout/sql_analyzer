@@ -47,7 +47,7 @@ router.post('/sql', analyzeValidation, async (req: Request, res: Response, next:
         details: result.details,
         chunkNumber: result.chunkNumber,
       });
-      
+
       return res.status(400).json(result);
     }
 
@@ -62,7 +62,7 @@ router.post('/sql', analyzeValidation, async (req: Request, res: Response, next:
       error: error instanceof Error ? error.message : 'Unknown error',
       stack: error instanceof Error ? error.stack : undefined,
     });
-    
+
     next(error);
   }
 });
@@ -87,7 +87,7 @@ router.post('/reports/generate', async (req: Request, res: Response, next: NextF
     });
 
     const report = await analysisService.generateReport(analysisData, reportType);
-    
+
     res.setHeader('Content-Type', 'text/html');
     res.setHeader('Content-Disposition', 'attachment; filename="sql-analysis-report.html"');
     res.send(report);
@@ -96,6 +96,29 @@ router.post('/reports/generate', async (req: Request, res: Response, next: NextF
       error: error instanceof Error ? error.message : 'Unknown error',
     });
     next(error);
+  }
+});
+
+router.post('/analyze', async (req, res) => {
+  try {
+    const { sqlCode, model = 'gemini' } = req.body as AnalysisRequest;
+
+    if (!sqlCode) {
+      return res.status(400).json({ error: 'SQL code is required' });
+    }
+
+    if (model !== 'gemini' && model !== 'openai') {
+      return res.status(400).json({ error: 'Invalid model selection. Must be either "gemini" or "openai"' });
+    }
+
+    const result = await analysisService.runAnalysis(sqlCode, model);
+    res.json(result);
+  } catch (error) {
+    console.error('Error in analysis endpoint:', error);
+    res.status(500).json({
+      error: 'Failed to analyze SQL code',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

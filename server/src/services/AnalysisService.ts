@@ -4,6 +4,16 @@ import { extractTableInfo, ExtractTableInfoInput, ExtractTableInfoOutput } from 
 import { generateSqlLogicalFlow, GenerateSqlLogicalFlowInput, GenerateSqlLogicalFlowOutput } from "../ai/flows/generate-sql-logical-flow";
 import { summarizeEntireSqlScript, SummarizeEntireScriptInput, SummarizeEntireScriptOutput } from "../ai/flows/summarize-entire-script";
 import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@shared/types/analysis";
+import { analyzeWithLlm, SYSTEM_PROMPTS } from '../ai/flows/llm-flows';
+import { z } from 'genkit';
+
+interface AnalysisResult {
+  codeBlockAnalysis: any;
+  logicRulesAnalysis: any;
+  tableInfoAnalysis: any;
+  logicalFlowAnalysis: any;
+  scriptSummary: any;
+}
 
 export class AnalysisService {
   /**
@@ -32,10 +42,10 @@ export class AnalysisService {
           const trimmedChunk = chunk.trim();
           return trimmedChunk;
         })
-        .filter(chunk => chunk.length > 0); 
-      
+        .filter(chunk => chunk.length > 0);
+
       if (chunks.length === 0 && trimmedSql.length > 0) {
-          return [trimmedSql]; // Treat as single chunk if only content is non-empty and no separators
+        return [trimmedSql]; // Treat as single chunk if only content is non-empty and no separators
       }
       return chunks;
     }
@@ -56,11 +66,11 @@ export class AnalysisService {
     }
 
     const chunks = this.chunkSqlScript(fullSqlCode);
-    
+
     if (chunks.length === 0) {
       return { error: "No processable SQL script found. The input might be empty or only contain separators like GO or ;." };
     }
-    
+
     const totalChunks = chunks.length;
     const chunkAnalyses: SingleAnalysisResult[] = [];
     let overallScriptSummary: string | undefined = undefined;
@@ -81,7 +91,7 @@ export class AnalysisService {
     for (let i = 0; i < totalChunks; i++) {
       const currentChunkSql = chunks[i];
       const chunkNumber = i + 1;
-      const chunkBlockTypeHint = blockType; 
+      const chunkBlockTypeHint = blockType;
 
       try {
         const summarizeInput: SummarizeCodeBlockInput = { code: currentChunkSql, blockType: chunkBlockTypeHint };
@@ -100,7 +110,7 @@ export class AnalysisService {
         chunkAnalyses.push({
           summary: summaryResult,
           detailedExplanation: explanationResult,
-          tableInfo: tableInfoResult || { identifiedTables: [] }, 
+          tableInfo: tableInfoResult || { identifiedTables: [] },
           logicalFlowSteps: logicalFlowResult || { flowSteps: [] },
           rawCode: currentChunkSql,
           blockType: chunkBlockTypeHint,
@@ -117,15 +127,15 @@ export class AnalysisService {
         };
       }
     }
-    
+
     if (chunkAnalyses.length === 0 && totalChunks > 0 && !overallScriptSummary) {
-        return { error: "No results were generated from SQL code analysis, though chunks were processed." };
+      return { error: "No results were generated from SQL code analysis, though chunks were processed." };
     }
 
-    return { 
-      chunkAnalyses, 
+    return {
+      chunkAnalyses,
       overallScriptSummary,
-      originalFullSqlCode: fullSqlCode 
+      originalFullSqlCode: fullSqlCode
     };
   }
 
@@ -136,7 +146,7 @@ export class AnalysisService {
     // This would use the existing report generation logic
     // For now, return a placeholder
     const timestamp = new Date().toISOString();
-    
+
     return `
       <!DOCTYPE html>
       <html>
@@ -167,5 +177,109 @@ export class AnalysisService {
         </body>
       </html>
     `;
+  }
+
+  private async runAnalysisOnChunk(chunk: string, model: 'gemini' | 'openai'): Promise<AnalysisResult> {
+    try {
+      // Define schemas for different analysis types
+      const codeBlockSchema = z.object({
+        mainPurpose: z.string(),
+        keyOperations: z.array(z.string()),
+        dataFlow: z.string(),
+        coreSqlConcepts: z.array(z.object({
+          concept: z.string(),
+          explanation: z.string(),
+          codeExample: z.string().optional()
+        })),
+        businessLogicInsights: z.array(z.string()),
+        beginnerFriendlyTips: z.array(z.string())
+      });
+
+      const logicRulesSchema = z.object({
+        chunkKeySummary: z.string(),
+        blockSummary: z.object({
+          identifiedType: z.string(),
+          purpose: z.string(),
+          inputParameters: z.array(z.object({
+            name: z.string(),
+            dataType: z.string(),
+            purpose: z.string()
+          })),
+          functionReturnType: z.string()
+        }),
+        proceduralControlFlow: z.array(z.object({
+          stepNumber: z.number(),
+          statement: z.string(),
+          description: z.string()
+        })),
+        targetObject: z.object({
+          name: z.string(),
+          targetType: z.string(),
+          writeOperation: z.string()
+        }),
+        sourceTables: z.array(z.object({
+          name: z.string(),
+          type: z.string(),
+          roleDescription: z.string()
+        })),
+        joinAnalysis: z.object({
+          joinsWithTargetTableExplanation: z.string(),
+          conditions: z.array(z.object({
+            joinType: z.string(),
+            tablesInvolved: z.string(),
+            onCondition: z.string(),
+            purpose: z.string()
+          }))
+        })
+      });
+
+      const tableInfoSchema = z.object({
+        identifiedTables: z.array(z.object({
+          name: z.string(),
+          primaryRole: z.enum(['Source', 'Target', 'SourceAndTarget', 'Mentioned']),
+          roleDescription: z.string(),
+          operations: z.array(z.string())
+        }))
+      });
+
+      const logicalFlowSchema = z.object({
+        flowSteps: z.array(z.object({
+          id: z.string(),
+          title: z.string(),
+          description: z.string(),
+          sqlReference: z.string()
+        }))
+      });
+
+      const scriptSummarySchema = z.object({
+        overallSummary: z.string()
+      });
+
+      // Run different analyses in parallel
+      const [
+        codeBlockAnalysis,
+        logicRulesAnalysis,
+        tableInfoAnalysis,
+        logicalFlowAnalysis,
+        scriptSummary
+      ] = await Promise.all([
+        analyzeWithLlm(chunk, SYSTEM_PROMPTS.summarizeCodeBlock, model, codeBlockSchema),
+        analyzeWithLlm(chunk, SYSTEM_PROMPTS.explainLogicRules, model, logicRulesSchema),
+        analyzeWithLlm(chunk, SYSTEM_PROMPTS.extractTableInfo, model, tableInfoSchema),
+        analyzeWithLlm(chunk, SYSTEM_PROMPTS.generateSqlLogicalFlow, model, logicalFlowSchema),
+        analyzeWithLlm(chunk, SYSTEM_PROMPTS.summarizeEntireScript, model, scriptSummarySchema)
+      ]);
+
+      return {
+        codeBlockAnalysis,
+        logicRulesAnalysis,
+        tableInfoAnalysis,
+        logicalFlowAnalysis,
+        scriptSummary
+      };
+    } catch (error) {
+      console.error('Error running analysis on chunk:', error);
+      throw new Error(`Failed to analyze SQL chunk: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 } 

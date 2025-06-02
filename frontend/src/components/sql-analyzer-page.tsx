@@ -695,13 +695,20 @@ const OverallScriptAnalysisDisplay: React.FC<{ payload: FullAnalysisPayload }> =
         </CardHeader>
         <CardContent className="py-3 px-4">
           {chunkAnalyses.length > 0 ? (
-            <ul className="list-decimal pl-5 space-y-2 text-foreground">
-              {chunkAnalyses.map(chunk => (
-                <li key={`chunk-summary-${chunk.chunkNumber}`}>
-                  <strong>Chunk {chunk.chunkNumber} of {chunk.totalChunks}:</strong> {chunk.detailedExplanation?.blockSummary?.identifiedType || "Type not identified"}
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <select
+                className="w-full p-2 rounded-md border border-input bg-background text-foreground"
+              >
+                {chunkAnalyses.map((chunk, idx) => (
+                  <option key={idx} value={idx}>
+                    Chunk {chunk.chunkNumber} of {chunk.totalChunks}: {chunk.detailedExplanation?.blockSummary?.identifiedType || "Type not identified"}
+                  </option>
+                ))}
+              </select>
+              <div className="text-sm text-muted-foreground">
+                {chunkAnalyses.length} chunks processed in total
+              </div>
+            </div>
           ) : (
             <p className="text-muted-foreground">No chunks were processed or identified.</p>
           )}
@@ -734,6 +741,7 @@ export default function SqlAnalyzerPage() {
   const [sqlCode, setSqlCode] = React.useState<string>("");
   const [fileName, setFileName] = React.useState<string>("");
   const [blockType, setBlockType] = React.useState<BlockTypeValue | undefined>(BLOCK_TYPES[3].value);
+  const [model, setModel] = React.useState<'gemini' | 'openai'>('gemini');
   const [isLoading, setIsLoading] = React.useState<boolean>(false);
 
   const [fullAnalysisPayload, setFullAnalysisPayload] = React.useState<FullAnalysisPayload | null>(null);
@@ -786,7 +794,7 @@ export default function SqlAnalyzerPage() {
     setCurrentChunkIndex(0);
 
     try {
-      const result = await ApiClient.analyzeSQL({ sqlCode, blockType });
+      const result = await ApiClient.analyzeSQL({ sqlCode, blockType, model });
 
       if (result.chunkAnalyses.length > 0 || (result.overallScriptSummary && result.overallScriptSummary.trim() !== "" && result.overallScriptSummary !== "Overall script summary was not generated.")) {
         setFullAnalysisPayload(result);
@@ -979,6 +987,18 @@ export default function SqlAnalyzerPage() {
                         {type.label}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="model" className="text-sm font-medium text-foreground/90">Select AI Model</Label>
+                <Select value={model} onValueChange={(value: 'gemini' | 'openai') => setModel(value)}>
+                  <SelectTrigger id="model" className="w-full shadow-sm focus:ring-2 focus:ring-primary/50 border-input bg-background">
+                    <SelectValue placeholder="Select AI model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gemini">Gemini</SelectItem>
+                    <SelectItem value="openai">OpenAI</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
