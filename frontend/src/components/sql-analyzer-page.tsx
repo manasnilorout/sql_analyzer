@@ -28,7 +28,7 @@ import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@
 import type { ExplainSqlBlockOutput } from "@/ai/flows/explain-logic-rules";
 import type { ExtractTableInfoOutput, IdentifiedTable } from "@/ai/flows/extract-table-info";
 import type { SummarizeCodeBlockOutput } from "@/ai/flows/summarize-code-block";
-import { APP_NAME, BLOCK_TYPES, BlockTypeValue } from "@shared/constants";
+import { APP_TITLE, BLOCK_TYPES, BlockTypeValue, COMPANY_NAME } from "@shared/constants";
 import {
   Loader2, AlertTriangle, FileTextIcon, Database, SearchCode, Code2, Table2Icon, InfoIcon,
   Lightbulb, Workflow, ListOrdered, MessageSquareQuote, Brain, Filter, LinkIcon, Shuffle,
@@ -577,15 +577,13 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ view, currentView, setV
     variant="ghost"
     onClick={() => setView(view)}
     className={cn(
-      "w-full justify-start text-left h-10 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+      "justify-start text-left h-10 px-3 py-2 rounded-md text-sm font-medium transition-colors",
       "text-sidebar-foreground hover:text-sidebar-primary hover:bg-sidebar-accent/20",
-      currentView === view && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold",
-      !isSidebarOpen && "px-0 justify-center w-12"
+      currentView === view && "bg-sidebar-accent text-sidebar-accent-foreground font-semibold"
     )}
-    title={!isSidebarOpen ? label : undefined}
   >
-    <span className={cn("w-5 h-5", isSidebarOpen ? "mr-3" : "mx-auto")}>{icon}</span>
-    {isSidebarOpen && label}
+    <span className="w-5 h-5 mr-2">{icon}</span>
+    {label}
   </Button>
 );
 
@@ -697,13 +695,20 @@ const OverallScriptAnalysisDisplay: React.FC<{ payload: FullAnalysisPayload }> =
         </CardHeader>
         <CardContent className="py-3 px-4">
           {chunkAnalyses.length > 0 ? (
-            <ul className="list-decimal pl-5 space-y-2 text-foreground">
-              {chunkAnalyses.map(chunk => (
-                <li key={`chunk-summary-${chunk.chunkNumber}`}>
-                  <strong>Chunk {chunk.chunkNumber} of {chunk.totalChunks}:</strong> {chunk.detailedExplanation?.blockSummary?.identifiedType || "Type not identified"}
-                </li>
-              ))}
-            </ul>
+            <div className="space-y-4">
+              <select
+                className="w-full p-2 rounded-md border border-input bg-background text-foreground"
+              >
+                {chunkAnalyses.map((chunk, idx) => (
+                  <option key={idx} value={idx}>
+                    Chunk {chunk.chunkNumber} of {chunk.totalChunks}: {chunk.detailedExplanation?.blockSummary?.identifiedType || "Type not identified"}
+                  </option>
+                ))}
+              </select>
+              <div className="text-sm text-muted-foreground">
+                {chunkAnalyses.length} chunks processed in total
+              </div>
+            </div>
           ) : (
             <p className="text-muted-foreground">No chunks were processed or identified.</p>
           )}
@@ -830,7 +835,7 @@ export default function SqlAnalyzerPage() {
   const handleExportChunkReport = () => {
     if (!currentChunkData) return;
 
-    const htmlContent = generateHtmlReport(currentChunkData, APP_NAME);
+    const htmlContent = generateHtmlReport(currentChunkData, APP_TITLE);
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -848,7 +853,7 @@ export default function SqlAnalyzerPage() {
   const handleExportFullReport = () => {
     if (!fullAnalysisPayload) return;
 
-    const htmlContent = generateFullHtmlReport(fullAnalysisPayload, APP_NAME);
+    const htmlContent = generateFullHtmlReport(fullAnalysisPayload, APP_TITLE);
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -928,14 +933,14 @@ export default function SqlAnalyzerPage() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="py-10 mb-8 border-b border-border/30 bg-gradient-to-r from-background to-muted/30 dark:from-background dark:to-muted/10">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-screen-xl">
-          <h1 className="text-5xl font-bold text-center text-primary tracking-tight">{APP_NAME}</h1>
+          <h1 className="text-5xl font-bold text-center text-primary tracking-tight">{APP_TITLE}</h1>
           <p className="text-center text-muted-foreground mt-3 max-w-2xl mx-auto text-lg">
-            Paste your SQL code or upload a file. 'GO' (on its own line) separates batches. Without 'GO', semicolons (;) separate statements (caution with ';' in comments/strings).
+            Paste your SQL code or upload a file.
           </p>
         </div>
       </header>
 
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-screen-xl">
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 max-w-8xl">
         <Card className="shadow-lg mb-8 border-border/50 bg-card">
           <CardHeader className="py-4 px-6">
             <CardTitle className="text-2xl text-primary">Input SQL Code</CardTitle>
@@ -1024,33 +1029,35 @@ export default function SqlAnalyzerPage() {
 
         {fullAnalysisPayload && (fullAnalysisPayload.chunkAnalyses.length > 0 || showOverallScriptNavItem) && (
           <>
-            <div className="flex flex-col lg:flex-row gap-x-6">
+            <div className="flex flex-col gap-x-6">
               {/* Sidebar */}
               <aside className={cn(
-                "lg:sticky lg:top-8 lg:h-[calc(100vh-4rem)] transition-all duration-300 ease-in-out mb-6 lg:mb-0",
-                isSidebarOpen ? "lg:w-64" : "lg:w-[4.5rem]"
+                "w-full transition-all duration-300 ease-in-out mb-6",
+                isSidebarOpen ? "h-auto" : "h-12"
               )}>
-                <Card className="shadow-md border-sidebar-border bg-sidebar h-full">
+                <Card className="shadow-md border-sidebar-border bg-sidebar">
                   <CardHeader className="p-3 border-b border-sidebar-border/70 flex flex-row items-center justify-between">
                     {isSidebarOpen && <CardTitle className="text-lg text-sidebar-primary ml-1">Analysis Sections</CardTitle>}
-                    <Button
+                    {/* <Button
                       variant="ghost"
                       size="icon"
                       onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                       className={cn("text-sidebar-muted-foreground hover:text-sidebar-primary", !isSidebarOpen && "mx-auto")}
-                      title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+                      title={isSidebarOpen ? "Collapse Navigation" : "Expand Navigation"}
                     >
                       {isSidebarOpen ? <SidebarClose size={20} /> : <SidebarOpen size={20} />}
-                    </Button>
+                    </Button> */}
                   </CardHeader>
-                  <CardContent className={cn("p-3 space-y-1.5 overflow-y-auto", !isSidebarOpen && "overflow-x-hidden")}>
-                    {showOverallScriptNavItem && (
-                      <SidebarNavItem view="overall_script" currentView={currentView} setView={setCurrentView} label="Overall Script" icon={<FileType size={18} />} isSidebarOpen={isSidebarOpen} />
-                    )}
-                    <SidebarNavItem view="summary" currentView={currentView} setView={setCurrentView} label="Chunk Summary" icon={<AlignLeft size={18} />} isSidebarOpen={isSidebarOpen} />
-                    <SidebarNavItem view="details" currentView={currentView} setView={setCurrentView} label="Chunk Deep Dive" icon={<SearchCode size={18} />} isSidebarOpen={isSidebarOpen} />
-                    <SidebarNavItem view="tables" currentView={currentView} setView={setCurrentView} label="Chunk Tables" icon={<Database size={18} />} isSidebarOpen={isSidebarOpen} />
-                    <SidebarNavItem view="visual_flow" currentView={currentView} setView={setCurrentView} label="Chunk Visual Flow" icon={<GitCompareArrows size={18} />} isSidebarOpen={isSidebarOpen} />
+                  <CardContent className={cn("p-3", !isSidebarOpen && "hidden")}>
+                    <div className="flex flex-wrap gap-2">
+                      {showOverallScriptNavItem && (
+                        <SidebarNavItem view="overall_script" currentView={currentView} setView={setCurrentView} label="Overall Script" icon={<FileType size={18} />} isSidebarOpen={isSidebarOpen} />
+                      )}
+                      <SidebarNavItem view="summary" currentView={currentView} setView={setCurrentView} label="Chunk Summary" icon={<AlignLeft size={18} />} isSidebarOpen={isSidebarOpen} />
+                      <SidebarNavItem view="details" currentView={currentView} setView={setCurrentView} label="Chunk Deep Dive" icon={<SearchCode size={18} />} isSidebarOpen={isSidebarOpen} />
+                      <SidebarNavItem view="tables" currentView={currentView} setView={setCurrentView} label="Chunk Tables" icon={<Database size={18} />} isSidebarOpen={isSidebarOpen} />
+                      <SidebarNavItem view="visual_flow" currentView={currentView} setView={setCurrentView} label="Chunk Visual Flow" icon={<GitCompareArrows size={18} />} isSidebarOpen={isSidebarOpen} />
+                    </div>
                   </CardContent>
                 </Card>
               </aside>
@@ -1058,7 +1065,7 @@ export default function SqlAnalyzerPage() {
               {/* Main Content Panes */}
               <main className={cn(
                 "flex-1 grid grid-cols-1 gap-x-8 min-w-0",
-                isRawCodePanelOpen ? "lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "lg:grid-cols-[1fr]"
+                isRawCodePanelOpen ? "lg:grid-cols-[2fr_3fr]" : "lg:grid-cols-[1fr]"
               )}>
                 {/* Analysis Content Pane */}
                 <div className="min-w-0 space-y-6">
@@ -1154,8 +1161,7 @@ export default function SqlAnalyzerPage() {
         )}
 
         <footer className="text-center py-12 mt-16 text-sm text-muted-foreground border-t border-border/30">
-          <p>&copy; {new Date().getFullYear()} {APP_NAME}. All rights reserved.</p>
-          <p>Powered by Genkit and Next.js.</p>
+          <p>&copy; {new Date().getFullYear()} {COMPANY_NAME}. All rights reserved.</p>
         </footer>
       </div>
     </div>
