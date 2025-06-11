@@ -18,7 +18,11 @@ import {z}from 'genkit';
 // --- Input Schema ---
 const ExplainSqlBlockInputSchema = z.object({
   sqlCode: z.string().describe('The SQL code block to analyze. If multiple DDL statements (e.g. multiple CREATE VIEW) are present for a specific blockType (e.g. View), the analysis will focus on the first complete DDL statement found.'),
-  blockType: z.string().describe('The type of the SQL code block provided by the user (e.g., "Stored Procedure", "View", "User Defined Function", "SQL Script"). The AI should confirm or refine this based on the primary operation within the provided code. If "SQL Script" is chosen and multiple operations exist, the AI will attempt to analyze the most significant one or provide a general overview.'),
+  blockType: z.string().describe('The type of the SQL code block provided by the user (e.g., "Stored Procedure", "View", "User Defined Function", "SQL Script", or a second-level type like "BEGIN_END_BLOCK"). The AI should confirm or refine this based on the primary operation within the provided code. If "SQL Script" is chosen and multiple operations exist, the AI will attempt to analyze the most significant one or provide a general overview.'),
+  partitionDetail: z.object({
+    level: z.enum(['first', 'second']),
+    type: z.string().optional().describe('The specific type of the partition, especially for second-level (e.g., IF_BLOCK, WHILE_LOOP).')
+  }).optional().describe('Details about the partition level and type, if applicable.')
 });
 export type ExplainSqlBlockInput = z.infer<typeof ExplainSqlBlockInputSchema>;
 
@@ -234,18 +238,27 @@ const prompt = ai.definePrompt({
   The explanation must be thorough, clear, and exceptionally helpful for a **junior developer** trying to understand complex SQL end-to-end.
   **CRITICAL: Process the ENTIRE SQL code provided, from beginning to end, without any truncation.** Be thorough and ensure all critical details are captured. Be concise where appropriate to manage output token usage but prioritize completeness of information.
 
-  User-provided SQL block type: {{{blockType}}}
+  {{#if partitionDetail}}
+  This is a {{partitionDetail.level}}-level partition.
+  {{#if partitionDetail.type}}
+  The specific type of this partition is '{{partitionDetail.type}}'.
+  Your analysis should focus on this specific block and its role. If it's a second-level partition, consider its function within the broader context of its parent first-level partition (e.g., a BEGIN...END block inside a Stored Procedure).
+  {{/if}}
+  {{/if}}
+
+  User-provided SQL block type (for context of this specific analysis): {{{blockType}}}
   SQL Code:
   \`\`\`sql
   {{{sqlCode}}}
   \`\`\`
 
-  **IMPORTANT Instructions for AI based on \`blockType\` and content:**
-  *   If \`{{{blockType}}}\` is "View", "Stored Procedure", or "User Defined Function", focus your analysis on the **first complete and valid DDL statement (CREATE VIEW, CREATE PROCEDURE, CREATE FUNCTION) of that type found in the \`sqlCode\`**. Subsequent DDL statements of the same type within the same \`sqlCode\` input should be ignored for this detailed breakdown to maintain clarity for a single block analysis. If multiple such objects are detected, state this in the 'purpose' field of the 'blockSummary' and clarify that the deep dive is on the first one.
-  *   If \`{{{blockType}}}\` is "SQL Script" and the \`sqlCode\` contains multiple distinct operations (e.g., several DML statements, or a mix of DDL and DML), attempt to analyze the most significant DML or DDL operation, or provide a general overview of the script's purpose and flow. Make this focus clear in the Block Summary.
-  *   For all other specific \`blockType\` (like INSERT, UPDATE, MERGE), analyze the provided code as a single logical unit.
+  **IMPORTANT Instructions for AI based on \`blockType\`, \`partitionDetail\`, and content:**
+  *   If \`partitionDetail.level\` is 'first' AND (\`{{{blockType}}}\` is "View" OR \`{{{blockType}}}\` is "Stored Procedure" OR \`{{{blockType}}}\` is "User Defined Function"), focus your analysis on the **first complete and valid DDL statement (CREATE VIEW, CREATE PROCEDURE, CREATE FUNCTION) of that type found in the \`sqlCode\`**. Subsequent DDL statements of the same type within the same \`sqlCode\` input should be ignored for this detailed breakdown. If multiple such objects are detected, state this in the 'purpose' field of the 'blockSummary'.
+  *   If \`partitionDetail.level\` is 'first' AND \`{{{blockType}}}\` is "SQL Script" AND the \`sqlCode\` contains multiple distinct operations, attempt to analyze the most significant DML or DDL operation, or provide a general overview. Make this focus clear in the Block Summary.
+  *   If \`partitionDetail.level\` is 'second', your analysis should be laser-focused on the provided \`{{{sqlCode}}}\` which represents a specific sub-block (e.g., a BEGIN...END block, an IF statement, a WHILE loop, or a DML statement). The \`{{{blockType}}}\` will reflect this specific sub-block's nature (e.g., 'BEGIN_END_BLOCK', 'IF_BLOCK', 'DML_SELECT').
+  *   For all other cases (e.g. first-level simple DML, or any block type not explicitly covered by the rules above), analyze the provided code as a single logical unit according to its \`{{{blockType}}}\`.
 
-  **Populate ALL fields in the output JSON schema to the best of your ability.** If a section or sub-field is genuinely not applicable or information cannot be reliably inferred, you may omit optional fields or use empty arrays for optional array fields. For required string fields where information is truly missing, state "Not applicable" or "Could not be determined." Do not invent information.
+  **Populate ALL fields in the output JSON schema to the best of your ability for the GIVEN CODE BLOCK.** If a section or sub-field is genuinely not applicable to the *specific code block being analyzed* (especially for smaller second-level partitions), you may omit optional fields or use empty arrays for optional array fields. For required string fields where information is truly missing for the given block, state "Not applicable for this specific block" or "Could not be determined for this block." Do not invent information. For example, a simple 'SELECT' statement (as a second-level partition) won't have 'inputParameters' or 'proceduralControlFlow'.
 
   **Explanation Framework (guide for your analysis):**
 

@@ -14,7 +14,11 @@ import {z} from 'genkit';
 
 const SummarizeCodeBlockInputSchema = z.object({
   code: z.string().describe('The SQL code block to summarize.'),
-  blockType: z.string().describe('The type of the SQL code block (e.g., stored procedure, view, function).'),
+  blockType: z.string().describe('The type of the SQL code block (e.g., stored procedure, view, function, or a second-level type like BEGIN_END_BLOCK).'),
+  partitionDetail: z.object({
+    level: z.enum(['first', 'second']),
+    type: z.string().optional().describe('The specific type of the partition, especially for second-level (e.g., IF_BLOCK, WHILE_LOOP).')
+  }).optional().describe('Details about the partition level and type, if applicable.')
 });
 export type SummarizeCodeBlockInput = z.infer<typeof SummarizeCodeBlockInputSchema>;
 
@@ -43,9 +47,16 @@ const summarizeCodeBlockPrompt = ai.definePrompt({
   input: {schema: SummarizeCodeBlockInputSchema},
   output: {schema: SummarizeCodeBlockOutputSchema},
   prompt: `You are an expert SQL code summarizer tasked with explaining code to junior developers in a structured and insightful way.
-  Analyze the following SQL {{{blockType}}} and provide a detailed breakdown according to the specified output schema.
+  {{#if partitionDetail}}
+  This is a {{partitionDetail.level}}-level partition.
+  {{#if partitionDetail.type}}
+  The specific type of this partition is '{{partitionDetail.type}}'.
+  Focus your analysis on this specific block and its role within its parent context (if applicable for second-level).
+  {{/if}}
+  {{/if}}
+  Analyze the following SQL code block (of type '{{{blockType}}}') and provide a detailed breakdown according to the specified output schema.
 
-  SQL Code Block Type: {{{blockType}}}
+  SQL Code Block Type (for context of this specific analysis): {{{blockType}}}
   SQL Code:
   \`\`\`sql
   {{{code}}}
