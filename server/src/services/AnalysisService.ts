@@ -12,6 +12,7 @@ import { ExplainSqlBlockOutputSchema, type ExplainSqlBlockOutput } from '../ai/f
 import { ExtractTableInfoOutputSchema, type ExtractTableInfoOutput } from '../ai/flows/extract-table-info';
 import { GenerateSqlLogicalFlowOutputSchema, type GenerateSqlLogicalFlowOutput } from '../ai/flows/generate-sql-logical-flow';
 import { SummarizeEntireScriptOutputSchema, type SummarizeEntireScriptOutput } from '../ai/flows/summarize-entire-script';
+import type { BlockType } from '@shared/types/analysis';
 
 
 // Define SecondLevelPartition interface (already includes SummarizeCodeBlockOutput and ExplainSqlBlockOutput)
@@ -22,6 +23,15 @@ interface SecondLevelPartition {
   endLine?: number;
   summary?: SummarizeCodeBlockOutput | null;
   detailedExplanation?: ExplainSqlBlockOutput | null;
+  blockTitle?: string;
+  blockSqlSnippet?: string;
+  blockExplanation?: string;
+  blockType?: BlockType;
+  blockComplexity?: 'simple' | 'moderate' | 'complex';
+  blockDependencies?: string[];
+  blockLineStart?: number;
+  blockLineEnd?: number;
+  executionOrder?: number;
 }
 
 // This interface seems unused now, can be removed if analyzeWithLlm method is also removed or refactored
@@ -45,6 +55,61 @@ export class AnalysisService {
     // Constructor can be used for other initializations if needed
     this.retryMaxRetries = DEFAULT_MAX_RETRIES;
     this.retryInitialDelayMs = DEFAULT_INITIAL_DELAY_MS;
+  }
+
+  private classifySecondLevelBlock(code: string): Partial<SecondLevelPartition> {
+    const snippet = code.trim();
+    const lineCount = snippet.split(/\n/).length;
+    const complexity: 'simple' | 'moderate' | 'complex' = lineCount <= 3
+      ? 'simple'
+      : lineCount <= 10
+      ? 'moderate'
+      : 'complex';
+
+    let blockType: BlockType = 'business_logic';
+    if (/^\s*DECLARE\b/i.test(snippet)) {
+      blockType = 'declaration';
+    } else if (/^\s*(SET|SELECT)\b.*@/i.test(snippet)) {
+      blockType = 'initialization';
+    } else if (/^\s*BEGIN\s+TRAN/i.test(snippet)) {
+      blockType = 'transaction';
+    } else if (/^\s*(WHILE|FOR)\b/i.test(snippet) || /\bFETCH\b/i.test(snippet)) {
+      blockType = 'loop';
+    } else if (/^\s*IF\b/i.test(snippet) || /\bCASE\b/i.test(snippet)) {
+      blockType = 'conditional';
+    } else if (/\bTRY\b|\bCATCH\b/i.test(snippet)) {
+      blockType = 'error_handling';
+    } else if (/^\s*(INSERT|UPDATE|DELETE|MERGE|SELECT)\b/i.test(snippet)) {
+      blockType = 'data_operation';
+    } else if (/\b(SUM|COUNT|AVG|MIN|MAX)\b/i.test(snippet)) {
+      blockType = 'calculation';
+    } else if (/\b(DROP|RETURN|CLOSE|DEALLOCATE)\b/i.test(snippet)) {
+      blockType = 'cleanup';
+    }
+
+    const titleMap: Record<BlockType, string> = {
+      declaration: 'Declaration Block',
+      initialization: 'Initialization Block',
+      business_logic: 'Business Logic Block',
+      transaction: 'Transaction Block',
+      loop: 'Loop Construct',
+      conditional: 'Conditional Logic',
+      error_handling: 'Error Handling Block',
+      data_operation: 'Data Operation',
+      calculation: 'Calculation Block',
+      cleanup: 'Cleanup/Return Block',
+    };
+
+    const dependencies = Array.from(new Set(snippet.match(/[@#]\w+/g) || []));
+
+    return {
+      blockType,
+      blockTitle: titleMap[blockType],
+      blockSqlSnippet: snippet,
+      blockExplanation: titleMap[blockType],
+      blockComplexity: complexity,
+      blockDependencies: dependencies,
+    };
   }
 
   private async invokeLlmWithRetry<TRequest extends LlmRequest>(
@@ -393,10 +458,19 @@ export class AnalysisService {
         if (trimmedUnprocessedSql.toUpperCase().startsWith('BEGIN')) {
             const blockEndIndex = findMatchingEnd(remainingSql, searchStartIndex);
             if (blockEndIndex !== -1) {
-                subPartitions.push({
-                    code: remainingSql.substring(searchStartIndex, blockEndIndex).trim(),
-                    type: 'BEGIN_END_BLOCK'
-                });
+            const codeBlock = remainingSql.substring(searchStartIndex, blockEndIndex).trim();
+            const startLine = remainingSql.substring(0, searchStartIndex).split('\n').length;
+            const endLine = remainingSql.substring(0, blockEndIndex).split('\n').length;
+            subPartitions.push({
+                code: codeBlock,
+                type: 'BEGIN_END_BLOCK',
+                startLine,
+                endLine,
+                blockLineStart: startLine,
+                blockLineEnd: endLine,
+                executionOrder: subPartitions.length + 1,
+                ...this.classifySecondLevelBlock(codeBlock)
+            });
                 currentParsePos = blockEndIndex;
                 matchFound = true;
             }
@@ -444,9 +518,18 @@ export class AnalysisService {
             }
             // If not BEGIN, findStatementEnd should have found the end of the IF statement.
 
+            const ifCode = remainingSql.substring(searchStartIndex, ifEndIndex).trim();
+            const ifStartLine = remainingSql.substring(0, searchStartIndex).split('\n').length;
+            const ifEndLine = remainingSql.substring(0, ifEndIndex).split('\n').length;
             subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, ifEndIndex).trim(),
-                type: 'IF_BLOCK' // Could be IF_STATEMENT or IF_BEGIN_END_BLOCK
+                code: ifCode,
+                type: 'IF_BLOCK', // Could be IF_STATEMENT or IF_BEGIN_END_BLOCK
+                startLine: ifStartLine,
+                endLine: ifEndLine,
+                blockLineStart: ifStartLine,
+                blockLineEnd: ifEndLine,
+                executionOrder: subPartitions.length + 1,
+                ...this.classifySecondLevelBlock(ifCode)
             });
             currentParsePos = ifEndIndex;
             matchFound = true;
@@ -466,9 +549,18 @@ export class AnalysisService {
                     whileEndIndex = remainingSql.length; // Consume rest
                 }
             }
+            const whileCode = remainingSql.substring(searchStartIndex, whileEndIndex).trim();
+            const whileStartLine = remainingSql.substring(0, searchStartIndex).split('\n').length;
+            const whileEndLine = remainingSql.substring(0, whileEndIndex).split('\n').length;
             subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, whileEndIndex).trim(),
-                type: 'WHILE_LOOP'
+                code: whileCode,
+                type: 'WHILE_LOOP',
+                startLine: whileStartLine,
+                endLine: whileEndLine,
+                blockLineStart: whileStartLine,
+                blockLineEnd: whileEndLine,
+                executionOrder: subPartitions.length + 1,
+                ...this.classifySecondLevelBlock(whileCode)
             });
             currentParsePos = whileEndIndex;
             matchFound = true;
@@ -478,9 +570,18 @@ export class AnalysisService {
         else if (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'WITH', 'TRY', 'CATCH'].some(kw => trimmedUnprocessedSql.toUpperCase().startsWith(kw))) {
             const dmlType = trimmedUnprocessedSql.substring(0, trimmedUnprocessedSql.indexOf(' ')).toUpperCase();
             const statementEndIndex = findStatementEnd(remainingSql, searchStartIndex);
+            const dmlCode = remainingSql.substring(searchStartIndex, statementEndIndex).trim();
+            const dmlStart = remainingSql.substring(0, searchStartIndex).split('\n').length;
+            const dmlEnd = remainingSql.substring(0, statementEndIndex).split('\n').length;
             subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, statementEndIndex).trim(),
-                type: `DML_${dmlType}` // Or more generic 'STATEMENT'
+                code: dmlCode,
+                type: `DML_${dmlType}`,
+                startLine: dmlStart,
+                endLine: dmlEnd,
+                blockLineStart: dmlStart,
+                blockLineEnd: dmlEnd,
+                executionOrder: subPartitions.length + 1,
+                ...this.classifySecondLevelBlock(dmlCode)
             });
             currentParsePos = statementEndIndex;
             matchFound = true;
@@ -498,7 +599,18 @@ export class AnalysisService {
 
             const remainingCodeChunk = remainingSql.substring(currentParsePos, advanceTo).trim();
             if (remainingCodeChunk) {
-                 subPartitions.push({ code: remainingCodeChunk, type: 'UNKNOWN_STATEMENT' });
+                 const start = remainingSql.substring(0, currentParsePos).split('\n').length;
+                 const end = remainingSql.substring(0, advanceTo).split('\n').length;
+                 subPartitions.push({
+                     code: remainingCodeChunk,
+                     type: 'UNKNOWN_STATEMENT',
+                     startLine: start,
+                     endLine: end,
+                     blockLineStart: start,
+                     blockLineEnd: end,
+                     executionOrder: subPartitions.length + 1,
+                     ...this.classifySecondLevelBlock(remainingCodeChunk)
+                 });
             }
             currentParsePos = advanceTo;
         }

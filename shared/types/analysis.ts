@@ -216,13 +216,34 @@ export interface SharedExplainSqlBlockOutput {
 }
 
 // Definition for Second-Level Partitions
+export type BlockType =
+  | 'declaration'
+  | 'initialization'
+  | 'business_logic'
+  | 'transaction'
+  | 'loop'
+  | 'conditional'
+  | 'error_handling'
+  | 'data_operation'
+  | 'calculation'
+  | 'cleanup';
+
 export interface SharedSecondLevelPartition {
   code: string;
-  type: string;
+  type: string; // legacy field
   startLine?: number;
   endLine?: number;
   summary?: SharedSummarizeCodeBlockOutput | null;
   detailedExplanation?: SharedExplainSqlBlockOutput | null;
+  blockTitle?: string;
+  blockSqlSnippet?: string;
+  blockExplanation?: string;
+  blockType?: BlockType;
+  blockComplexity?: 'simple' | 'moderate' | 'complex';
+  blockDependencies?: string[];
+  blockLineStart?: number;
+  blockLineEnd?: number;
+  executionOrder?: number;
   // tableInfo and logicalFlowSteps are not planned for second-level in this iteration
 }
 

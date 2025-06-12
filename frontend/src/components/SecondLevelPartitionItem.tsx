@@ -32,13 +32,19 @@ const SecondLevelPartitionItem: React.FC<SecondLevelPartitionItemProps> = ({ par
     <Card className="mb-4 shadow-md border-border/60 hover:shadow-lg transition-shadow duration-200 ease-in-out bg-card">
       <CardHeader className="py-3 px-4">
         <CardTitle className="text-lg text-primary flex items-center justify-between">
-          Sub-Block Type:
-          <Badge variant="secondary" className="ml-2 text-md">{partition.type}</Badge>
+          {partition.blockTitle || 'Sub-Block'}
+          <Badge variant="secondary" className="ml-2 text-md">{partition.blockType || partition.type}</Badge>
         </CardTitle>
+        {partition.blockComplexity && (
+          <CardDescription className="text-xs text-muted-foreground mt-1">Complexity: {partition.blockComplexity}</CardDescription>
+        )}
         {partition.startLine !== undefined && partition.endLine !== undefined && (
            <CardDescription className="text-xs text-muted-foreground mt-1">
              Lines: {partition.startLine} - {partition.endLine} (approx.)
            </CardDescription>
+        )}
+        {partition.executionOrder !== undefined && (
+          <CardDescription className="text-xs text-muted-foreground mt-1">Order: {partition.executionOrder}</CardDescription>
         )}
       </CardHeader>
       <CardContent className="px-4 pb-4">
@@ -47,10 +53,15 @@ const SecondLevelPartitionItem: React.FC<SecondLevelPartitionItemProps> = ({ par
             <AccordionTrigger className="px-4 py-2 text-sm font-semibold hover:no-underline text-foreground flex items-center gap-2">
               <FileCode size={16} className="text-primary/80" /> View Code
             </AccordionTrigger>
-            <AccordionContent className="p-2 border-t border-border/50">
-              <CodeBlock code={partition.code} className="text-xs max-h-[300px]" />
-            </AccordionContent>
-          </AccordionItem>
+          <AccordionContent className="p-2 border-t border-border/50">
+            <CodeBlock code={partition.code} className="text-xs max-h-[300px]" />
+            {partition.blockDependencies && partition.blockDependencies.length > 0 && (
+              <div className="mt-2 text-xs text-muted-foreground">
+                Depends on: {partition.blockDependencies.join(', ')}
+              </div>
+            )}
+          </AccordionContent>
+        </AccordionItem>
 
           <AccordionItem value={`${itemValue}-summary`} className="border rounded-md shadow-sm bg-muted/30 hover:bg-muted/50 transition-colors">
             <AccordionTrigger className="px-4 py-2 text-sm font-semibold hover:no-underline text-foreground flex items-center gap-2">
