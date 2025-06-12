@@ -6,16 +6,23 @@ export class OpenAiImpl extends AbstractLlmImpl {
 
     constructor(
         apiKey: string,
-        defaultModel: string = 'gpt-4-turbo-preview',
+        defaultModel: string = 'gpt-4o', // Changed default model to gpt-4o
         defaultTemperature: number = 0.7,
-        defaultMaxTokens: number = 2000
+        defaultMaxTokens: number = 2048 // Standardized default max tokens
     ) {
         super(apiKey, defaultModel, defaultTemperature, defaultMaxTokens);
+        if (!apiKey) { // Added explicit API key check for clarity, though OpenAI client would also fail
+            throw new Error('OpenAI API key is required for OpenAiImpl.');
+        }
         this.client = new OpenAI({ apiKey });
     }
 
     async sendMessageToLlm(request: LlmRequest): Promise<LlmResponse> {
         this.validateRequest(request);
+
+        const apiTimeoutMs = process.env.LLM_API_TIMEOUT_MS
+            ? parseInt(process.env.LLM_API_TIMEOUT_MS, 10)
+            : 120000; // Default to 120 seconds
 
         try {
             const response = await this.client.chat.completions.create({
@@ -27,6 +34,8 @@ export class OpenAiImpl extends AbstractLlmImpl {
                 temperature: this.getTemperature(request),
                 max_tokens: this.getMaxTokens(request),
                 response_format: { type: 'json_object' }
+            }, {
+                timeout: apiTimeoutMs,
             });
 
             const content = response.choices[0]?.message?.content;

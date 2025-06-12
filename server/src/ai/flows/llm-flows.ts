@@ -1,6 +1,7 @@
-import { LlmFactory } from '../llm/LlmFactory';
+import { LlmFactory, LlmType } from '../llm/LlmFactory'; // Ensure LlmType is imported
 import { LlmRequest } from '../llm/AbstractLlmImpl';
 import { z } from 'genkit';
+
 
 // Common system prompts for different analysis types
 const SYSTEM_PROMPTS = {
@@ -68,19 +69,24 @@ const SYSTEM_PROMPTS = {
 function createLlmRequest(
     prompt: string,
     systemPrompt: string,
-    model: 'gemini' | 'openai'
+    modelProvider: LlmType // Changed 'model' to 'modelProvider'
 ): LlmRequest {
+    // This function might need more sophisticated logic if specific model names
+    // are required for different providers beyond what LlmFactory sets as default.
+    // For now, it sets a specific model name only if OpenAI is the provider,
+    // otherwise, it relies on the default model configured for the provider in LlmFactory.
     return {
         prompt,
         systemPrompt,
-        model: model === 'openai' ? 'gpt-4o' : undefined,
-        temperature: 0.7,
-        maxTokens: 2000
+        model: modelProvider === 'openai' ? 'gpt-4o' : undefined,
+        temperature: 0.7, // These could also come from provider-specific defaults
+        maxTokens: 2048  // or be part of the LlmRequest structure itself if more control is needed per call
     };
 }
 
 // Helper function to validate and parse LLM response
-async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
+// Exporting this as it's used by AnalysisService
+export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
     try {
         const parsed = JSON.parse(response);
         return schema.parse(parsed);
@@ -96,14 +102,16 @@ async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T
 export async function analyzeWithLlm<T>(
     prompt: string,
     systemPrompt: string,
-    model: 'gemini' | 'openai',
+    modelProvider: LlmType, // Changed 'model' to 'modelProvider' to reflect it's a LlmType
     schema: z.ZodType<T>
 ): Promise<T> {
-    const llm = LlmFactory.getInstance(model);
-    const request = createLlmRequest(prompt, systemPrompt, model);
+    const llm = LlmFactory.getInstance(modelProvider);
+    // createLlmRequest now correctly takes modelProvider
+    const request = createLlmRequest(prompt, systemPrompt, modelProvider);
     const response = await llm.sendMessageToLlm(request);
     return validateAndParseResponse(response.content, schema);
 }
 
 // Export the system prompts for use in other files
-export { SYSTEM_PROMPTS }; 
+export { SYSTEM_PROMPTS };
+// validateAndParseResponse is already exported above due to its usage in AnalysisService
