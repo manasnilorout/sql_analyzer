@@ -87,8 +87,25 @@ function createLlmRequest(
 // Helper function to validate and parse LLM response
 // Exporting this as it's used by AnalysisService
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
+    let cleanedResponse = response.trim();
+
+    // Regex to detect and extract content from Markdown JSON code fences
+    // It handles optional "json" language specifier and surrounding whitespace.
+    const markdownFenceRegex = /^\s*```(?:json)?\s*([\s\S]+?)\s*```\s*$/;
+    const match = cleanedResponse.match(markdownFenceRegex);
+
+    if (match && match[1]) {
+        cleanedResponse = match[1].trim(); // Use the captured group if match is found
+    }
+    // Additional check for cases where only ``` is present without json and content is not captured by regex group
+    // This might be redundant if the regex is robust enough but can be a fallback.
+    // else if (cleanedResponse.startsWith("```") && cleanedResponse.endsWith("```")) {
+    // cleanedResponse = cleanedResponse.substring(3, cleanedResponse.length - 3).trim();
+    // }
+
+
     try {
-        const parsed = JSON.parse(response);
+        const parsed = JSON.parse(cleanedResponse);
         return schema.parse(parsed);
     } catch (error) {
         if (error instanceof z.ZodError) {
