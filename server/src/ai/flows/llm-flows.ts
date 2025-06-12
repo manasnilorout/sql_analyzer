@@ -85,41 +85,30 @@ function createLlmRequest(
 }
 
 // Helper function to validate and parse LLM response
+import { logger } from '../../utils/logger'; // Assuming logger is exported from here or createLogger is used. Let's use an existing pattern.
+// If createLogger is the export:
+// import { createLogger } from '../../utils/logger';
+// const logger = createLogger(); // Initialize logger if createLogger pattern is used
+
 // Exporting this as it's used by AnalysisService
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
     let processedResponse = response.trim();
 
-    // Layer 1: Try specific ```json ... ```
-    if (processedResponse.startsWith("```json") && processedResponse.endsWith("```")) {
-        processedResponse = processedResponse.substring("```json".length, processedResponse.length - "```".length).trim();
-    }
-    // Layer 2: Try generic ``` ... ``` (applied to the result of Layer 1 or original trimmed string)
-    // This will catch cases where Layer 1 might have been too specific or if only generic fences were used.
-    if (processedResponse.startsWith("```") && processedResponse.endsWith("```")) {
-        processedResponse = processedResponse.substring("```".length, processedResponse.length - "```".length).trim();
-    }
+    // Simplified robust regex approach
+    const markdownJsonRegex = /^```(?:json)?\s*([\s\S]*?)\s*```$/;
+    const match = processedResponse.match(markdownJsonRegex);
 
-    // Layer 3: A more forgiving regex as a final attempt.
-    // This regex tries to find content between the *first* instance of ```json or ``` and the *last* instance of ```.
-    // This is applied to the original trimmed response to ensure it can catch partial stripping from layers 1 & 2.
-    const looksLikeJson = (str: string) => (str.startsWith("{") && str.endsWith("}")) || (str.startsWith("[") && str.endsWith("]"));
-
-    if (!looksLikeJson(processedResponse)) {
-        const originalTrimmedResponse = response.trim();
-        // Regex to find content between optional json specifier and markdown fences
-        // It captures content between the first occurrence of ``` (optionally followed by 'json') and the last ```
-        const forgivingRegex = /^```(?:json)?\s*([\s\S]*?)\s*```$/;
-        const forgivingMatch = originalTrimmedResponse.match(forgivingRegex);
-
-        if (forgivingMatch && forgivingMatch[1]) {
-            const regexCleanedResponse = forgivingMatch[1].trim();
-            // Prefer regex result if it looks more like JSON than what simple stripping produced,
-            // or if simple stripping produced something that doesn't look like JSON.
-            if (looksLikeJson(regexCleanedResponse) || !looksLikeJson(processedResponse)) {
-                 processedResponse = regexCleanedResponse;
-            }
-        }
+    if (match && match[1]) {
+        processedResponse = match[1].trim();
     }
+    // No more layered string prefix/suffix checks after this regex.
+    // The regex is designed to handle the common cases including ```json ... ``` and ``` ... ```.
+
+    // Debug logging to see the exact string before parsing
+    // Using console.log for direct visibility in this tool's output if logger isn't configured for debug in CI
+    console.log("Attempting to parse JSON from cleaned string (first 500 chars):", processedResponse.substring(0, 500));
+    // Or use logger if available and configured:
+    // logger.debug(`Attempting to parse JSON from cleaned string: [${processedResponse}]`);
 
     try {
         const parsed = JSON.parse(processedResponse);
