@@ -87,31 +87,52 @@ function createLlmRequest(
 // Helper function to validate and parse LLM response
 // Exporting this as it's used by AnalysisService
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
-    let cleanedResponse = response.trim();
+    let processedResponse = response.trim();
 
-    // Regex to detect and extract content from Markdown JSON code fences
-    // It handles optional "json" language specifier and surrounding whitespace.
-    const markdownFenceRegex = /^\s*```(?:json)?\s*([\s\S]+?)\s*```\s*$/;
-    const match = cleanedResponse.match(markdownFenceRegex);
-
-    if (match && match[1]) {
-        cleanedResponse = match[1].trim(); // Use the captured group if match is found
+    // Layer 1: Try specific ```json ... ```
+    if (processedResponse.startsWith("```json") && processedResponse.endsWith("```")) {
+        processedResponse = processedResponse.substring("```json".length, processedResponse.length - "```".length).trim();
     }
-    // Additional check for cases where only ``` is present without json and content is not captured by regex group
-    // This might be redundant if the regex is robust enough but can be a fallback.
-    // else if (cleanedResponse.startsWith("```") && cleanedResponse.endsWith("```")) {
-    // cleanedResponse = cleanedResponse.substring(3, cleanedResponse.length - 3).trim();
-    // }
+    // Layer 2: Try generic ``` ... ``` (applied to the result of Layer 1 or original trimmed string)
+    // This will catch cases where Layer 1 might have been too specific or if only generic fences were used.
+    if (processedResponse.startsWith("```") && processedResponse.endsWith("```")) {
+        processedResponse = processedResponse.substring("```".length, processedResponse.length - "```".length).trim();
+    }
 
+    // Layer 3: A more forgiving regex as a final attempt.
+    // This regex tries to find content between the *first* instance of ```json or ``` and the *last* instance of ```.
+    // This is applied to the original trimmed response to ensure it can catch partial stripping from layers 1 & 2.
+    const looksLikeJson = (str: string) => (str.startsWith("{") && str.endsWith("}")) || (str.startsWith("[") && str.endsWith("]"));
+
+    if (!looksLikeJson(processedResponse)) {
+        const originalTrimmedResponse = response.trim();
+        // Regex to find content between optional json specifier and markdown fences
+        // It captures content between the first occurrence of ``` (optionally followed by 'json') and the last ```
+        const forgivingRegex = /^```(?:json)?\s*([\s\S]*?)\s*```$/;
+        const forgivingMatch = originalTrimmedResponse.match(forgivingRegex);
+
+        if (forgivingMatch && forgivingMatch[1]) {
+            const regexCleanedResponse = forgivingMatch[1].trim();
+            // Prefer regex result if it looks more like JSON than what simple stripping produced,
+            // or if simple stripping produced something that doesn't look like JSON.
+            if (looksLikeJson(regexCleanedResponse) || !looksLikeJson(processedResponse)) {
+                 processedResponse = regexCleanedResponse;
+            }
+        }
+    }
 
     try {
-        const parsed = JSON.parse(cleanedResponse);
+        const parsed = JSON.parse(processedResponse);
         return schema.parse(parsed);
     } catch (error) {
+        // Add more context to the error message if parsing failed after cleaning
+        const originalContentForError = response.length > 100 ? response.substring(0, 100) + "..." : response;
+        const processedContentForError = processedResponse.length > 100 ? processedResponse.substring(0, 100) + "..." : processedResponse;
+
         if (error instanceof z.ZodError) {
-            throw new Error(`Schema validation failed: ${error.message}`);
+            throw new Error(`Schema validation failed after cleaning response. Error: ${error.message}. Original snippet: "${originalContentForError}". Processed snippet: "${processedContentForError}"`);
         }
-        throw new Error(`Failed to parse LLM response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(`Failed to parse LLM response as JSON after cleaning. Error: ${error instanceof Error ? error.message : 'Unknown error'}. Original snippet: "${originalContentForError}". Processed snippet: "${processedContentForError}"`);
     }
 }
 
