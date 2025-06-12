@@ -1,9 +1,11 @@
-import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@shared/types/analysis";
+import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult, SharedSecondLevelPartition } from "@shared/types/analysis";
+import { BlockType } from "@shared/types/analysis";
 import { z } from 'genkit'; // Genkit's z import might still be used by schemas, or can be replaced by 'zod'
 import { LlmFactory, LlmType } from '../ai/llm/LlmFactory'; // Import LlmType
 import { AbstractLlmImpl, LlmRequest, LlmResponse } from '../ai/llm/AbstractLlmImpl';
 import { SYSTEM_PROMPTS, validateAndParseResponse, analyzeWithLlm } from '../ai/flows/llm-flows'; // Added analyzeWithLlm
 import { createLogger } from '../utils/logger'; // Corrected path
+import { EnhancedSqlParser, BlockParsingContext } from './EnhancedSqlParser';
 const logger = createLogger();
 
 // Import Zod Schemas and TypeScript types for outputs from their original flow files
@@ -12,17 +14,6 @@ import { ExplainSqlBlockOutputSchema, type ExplainSqlBlockOutput } from '../ai/f
 import { ExtractTableInfoOutputSchema, type ExtractTableInfoOutput } from '../ai/flows/extract-table-info';
 import { GenerateSqlLogicalFlowOutputSchema, type GenerateSqlLogicalFlowOutput } from '../ai/flows/generate-sql-logical-flow';
 import { SummarizeEntireScriptOutputSchema, type SummarizeEntireScriptOutput } from '../ai/flows/summarize-entire-script';
-
-
-// Define SecondLevelPartition interface (already includes SummarizeCodeBlockOutput and ExplainSqlBlockOutput)
-interface SecondLevelPartition {
-  code: string;
-  type: string;
-  startLine?: number;
-  endLine?: number;
-  summary?: SummarizeCodeBlockOutput | null;
-  detailedExplanation?: ExplainSqlBlockOutput | null;
-}
 
 // This interface seems unused now, can be removed if analyzeWithLlm method is also removed or refactored
 // interface AnalysisResult {
@@ -40,11 +31,13 @@ export class AnalysisService {
   // llmInstance is no longer a class member initialized in constructor
   private readonly retryMaxRetries: number;
   private readonly retryInitialDelayMs: number;
+  private readonly enhancedParser: EnhancedSqlParser;
 
   constructor() {
     // Constructor can be used for other initializations if needed
     this.retryMaxRetries = DEFAULT_MAX_RETRIES;
     this.retryInitialDelayMs = DEFAULT_INITIAL_DELAY_MS;
+    this.enhancedParser = new EnhancedSqlParser();
   }
 
   private async invokeLlmWithRetry<TRequest extends LlmRequest>(
@@ -266,245 +259,125 @@ export class AnalysisService {
 
   private findSecondLevelPartitions(
     firstLevelSql: string,
-    _parentBlockType: string // parentBlockType might be used later for context-specific parsing
-  ): SecondLevelPartition[] {
-    const subPartitions: SecondLevelPartition[] = [];
-    // Normalize line endings and remove leading/trailing whitespace from the whole block
-    let remainingSql = firstLevelSql.replace(/\r\n/g, '\n').trim();
-    let currentIndex = 0; // Tracks position in the original firstLevelSql for slicing
+    parentBlockType: string
+  ): SharedSecondLevelPartition[] {
+    try {
+      // Extract basic context information from the first level SQL
+      const context: BlockParsingContext = {
+        parentBlockType,
+        parentBlockCode: firstLevelSql,
+        currentNestingLevel: 0,
+        availableVariables: this.extractVariables(firstLevelSql),
+        availableTables: this.extractTables(firstLevelSql),
+        executionHistory: []
+      };
 
-    // Comments should have been stripped by partitionSqlScriptV1, but good to keep in mind for future
-    // For simplicity, this version won't re-strip comments.
-
-    // Keywords that define blocks or standalone statements (case-insensitive)
-    const keywords = [
-      'BEGIN', 'END', 'IF', 'ELSE', 'WHILE', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE',
-      'WITH', // For CTEs
-      'TRY', 'CATCH' // For TRY...CATCH blocks
-      // ADD OTHER KEYWORDS AS NEEDED: 'CREATE', 'ALTER', 'DROP', 'TRUNCATE' for DDL-like statements if any pass through first-level
-    ];
-
-    // Regex to find any of the keywords, ensuring they are whole words
-    // We also want to capture semicolons as potential statement terminators for DML
-    const keywordRegex = new RegExp(`(^|\\s+|\\()(${keywords.join('|')})(\\s+|\\(|;|$)`, 'ims');
-
-    // Helper to find a matching END for a BEGIN, respecting nesting
-    const findMatchingEnd = (sqlSlice: string, startIndex: number): number => {
-      let depth = 0;
-      let position = startIndex;
-      const beginRegex = /\bBEGIN\b/ig;
-      const endRegex = /\bEND\b/ig;
-      let lastMatchEnd = -1;
-
-      // First, ensure we are at a BEGIN
-      const testBeginRegex = /^\s*BEGIN\b/i;
-      if(!testBeginRegex.test(sqlSlice.substring(position))) {
-          return -1; // Should not happen if called correctly
-      }
-
-      // Find the first BEGIN
-      let match = beginRegex.exec(sqlSlice.substring(position));
-      if (match) {
-          position += match.index; // Move to the start of BEGIN
-          depth = 1;
-          position += match[0].length;
-      } else {
-          return -1; // No BEGIN found
-      }
-
-      while (depth > 0 && position < sqlSlice.length) {
-          const nextBegin = beginRegex.exec(sqlSlice.substring(position));
-          const nextEnd = endRegex.exec(sqlSlice.substring(position));
-
-          if (nextBegin && (!nextEnd || nextBegin.index < nextEnd.index)) {
-              depth++;
-              position += nextBegin.index + nextBegin[0].length;
-          } else if (nextEnd) {
-              depth--;
-              position += nextEnd.index + nextEnd[0].length;
-              if (depth === 0) {
-                  lastMatchEnd = position;
-                  return lastMatchEnd; // Found the matching END
-              }
-          } else {
-              break; // No more BEGIN or END found, unterminated block
-          }
-      }
-      return -1; // No matching END found
-    };
-
-    // Helper to find simple statement end (semicolon, or next keyword)
-    const findStatementEnd = (sqlSlice: string, startIndex: number): number => {
-        let pos = startIndex;
-        let openParens = 0;
-        let inStringLiteral = false;
-        let stringChar = '';
-
-        while(pos < sqlSlice.length) {
-            const char = sqlSlice[pos];
-            const nextChar = sqlSlice[pos+1];
-
-            if (inStringLiteral) {
-                if (char === stringChar && nextChar === stringChar) { // escaped quote
-                    pos++;
-                } else if (char === stringChar) {
-                    inStringLiteral = false;
-                }
-            } else if (char === "'" || char === '"' || char === '`') {
-                inStringLiteral = true;
-                stringChar = char;
-            } else if (char === '(') {
-                openParens++;
-            } else if (char === ')') {
-                openParens--;
-            } else if (char === ';' && openParens === 0) {
-                return pos + 1; // include semicolon
-            }
-
-            // Check for next keyword if not in parens or string
-            if (openParens === 0 && !inStringLiteral) {
-                const aheadSlice = sqlSlice.substring(pos);
-                const nextKeywordMatch = aheadSlice.match(new RegExp(`^\\s*(${keywords.join('|')})(\\s+|\\(|;|$)`, 'i'));
-                if (nextKeywordMatch && pos > startIndex) { // Make sure we've consumed some part of the statement
-                     // Check if this keyword is part of the current statement (e.g. SELECT ... FROM (SELECT ...))
-                     // This is a simplification, full context is hard.
-                     // For now, any keyword will terminate the current simple DML.
-                    return pos; // end before the next keyword
-                }
-            }
-            pos++;
-        }
-        return sqlSlice.length; // End of string
-    };
-
-
-    let currentParsePos = 0;
-    while(currentParsePos < remainingSql.length) {
-        const unprocessedSql = remainingSql.substring(currentParsePos);
-        const trimmedUnprocessedSql = unprocessedSql.trimStart();
-        const leadingWhitespaceLength = unprocessedSql.length - trimmedUnprocessedSql.length;
-
-        if (trimmedUnprocessedSql.length === 0) break;
-
-        const searchStartIndex = currentParsePos + leadingWhitespaceLength;
-        let matchFound = false;
-
-        // Test for BEGIN...END blocks
-        if (trimmedUnprocessedSql.toUpperCase().startsWith('BEGIN')) {
-            const blockEndIndex = findMatchingEnd(remainingSql, searchStartIndex);
-            if (blockEndIndex !== -1) {
-                subPartitions.push({
-                    code: remainingSql.substring(searchStartIndex, blockEndIndex).trim(),
-                    type: 'BEGIN_END_BLOCK'
-                });
-                currentParsePos = blockEndIndex;
-                matchFound = true;
-            }
-        }
-        // IF condition THEN block [ELSE block]
-        else if (trimmedUnprocessedSql.toUpperCase().startsWith('IF')) {
-            // This is complex. A simple version: find the statement/block for IF, then look for ELSE.
-            // For now, let's just identify the IF statement itself.
-            // A more robust solution would parse the condition and the THEN/ELSE blocks.
-            // This needs to find the end of the IF condition (e.g. before BEGIN or a statement)
-            // then find the end of the THEN block, then look for ELSE.
-
-            // Simplified: capture up to the start of its BEGIN or to its statement end
-            let ifEndIndex = findStatementEnd(remainingSql, searchStartIndex + "IF".length); // Start after "IF "
-
-            // Check if the IF condition is followed by BEGIN
-            const nextWordAfterIf = remainingSql.substring(ifEndIndex).trimStart().toUpperCase();
-            if (nextWordAfterIf.startsWith('BEGIN')) {
-                const thenBlockStartIndex = searchStartIndex + remainingSql.substring(searchStartIndex).toUpperCase().indexOf('BEGIN');
-                const thenBlockEndIndex = findMatchingEnd(remainingSql, thenBlockStartIndex);
-                if (thenBlockEndIndex !== -1) {
-                    ifEndIndex = thenBlockEndIndex; // The IF block includes the THEN BEGIN...END
-
-                    // Look for ELSE
-                    const elseSearchSql = remainingSql.substring(ifEndIndex).trimStart();
-                    if (elseSearchSql.toUpperCase().startsWith('ELSE')) {
-                        const elseStartIndexOriginal = ifEndIndex + remainingSql.substring(ifEndIndex).indexOf(elseSearchSql);
-                        const elseBodySql = elseSearchSql.substring('ELSE'.length).trimStart();
-                        if (elseBodySql.toUpperCase().startsWith('BEGIN')) {
-                            const elseBlockStartIndex = elseStartIndexOriginal + elseSearchSql.substring('ELSE'.length).toUpperCase().indexOf('BEGIN');
-                            const elseBlockEndIndex = findMatchingEnd(remainingSql, elseBlockStartIndex);
-                            if (elseBlockEndIndex !== -1) {
-                                ifEndIndex = elseBlockEndIndex;
-                            } else { // Unterminated ELSE BEGIN
-                                ifEndIndex = remainingSql.length; // Consume rest
-                            }
-                        } else { // ELSE followed by single statement
-                            const elseStatementEnd = findStatementEnd(remainingSql, elseStartIndexOriginal + 'ELSE'.length);
-                            ifEndIndex = elseStatementEnd;
-                        }
-                    }
-                } else { // Unterminated IF ... BEGIN
-                     ifEndIndex = remainingSql.length; // Consume rest
-                }
-            }
-            // If not BEGIN, findStatementEnd should have found the end of the IF statement.
-
-            subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, ifEndIndex).trim(),
-                type: 'IF_BLOCK' // Could be IF_STATEMENT or IF_BEGIN_END_BLOCK
-            });
-            currentParsePos = ifEndIndex;
-            matchFound = true;
-        }
-        // WHILE loop
-        else if (trimmedUnprocessedSql.toUpperCase().startsWith('WHILE')) {
-            // Similar to IF, find condition, then find BEGIN...END or single statement
-            let whileEndIndex = findStatementEnd(remainingSql, searchStartIndex + "WHILE".length); // Start after "WHILE "
-            const nextWordAfterWhile = remainingSql.substring(whileEndIndex).trimStart().toUpperCase();
-
-            if (nextWordAfterWhile.startsWith('BEGIN')) {
-                const loopBodyStartIndex = searchStartIndex + remainingSql.substring(searchStartIndex).toUpperCase().indexOf('BEGIN');
-                const loopBodyEndIndex = findMatchingEnd(remainingSql, loopBodyStartIndex);
-                if (loopBodyEndIndex !== -1) {
-                    whileEndIndex = loopBodyEndIndex;
-                } else { // Unterminated WHILE ... BEGIN
-                    whileEndIndex = remainingSql.length; // Consume rest
-                }
-            }
-            subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, whileEndIndex).trim(),
-                type: 'WHILE_LOOP'
-            });
-            currentParsePos = whileEndIndex;
-            matchFound = true;
-        }
-        // DML Statements (SELECT, INSERT, UPDATE, DELETE, MERGE)
-        // Also TRY, CATCH as simple statements for now
-        else if (['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'WITH', 'TRY', 'CATCH'].some(kw => trimmedUnprocessedSql.toUpperCase().startsWith(kw))) {
-            const dmlType = trimmedUnprocessedSql.substring(0, trimmedUnprocessedSql.indexOf(' ')).toUpperCase();
-            const statementEndIndex = findStatementEnd(remainingSql, searchStartIndex);
-            subPartitions.push({
-                code: remainingSql.substring(searchStartIndex, statementEndIndex).trim(),
-                type: `DML_${dmlType}` // Or more generic 'STATEMENT'
-            });
-            currentParsePos = statementEndIndex;
-            matchFound = true;
-        }
-
-        if (!matchFound) {
-            // If no specific block type is found, find the next semicolon or end of string
-            // This is to handle leftover code or simple statements not caught above
-            let advanceTo = remainingSql.indexOf(';', currentParsePos);
-            if (advanceTo === -1 || advanceTo < currentParsePos) { // No semicolon or already passed
-                advanceTo = remainingSql.length;
-            } else {
-                advanceTo += 1; // Include the semicolon
-            }
-
-            const remainingCodeChunk = remainingSql.substring(currentParsePos, advanceTo).trim();
-            if (remainingCodeChunk) {
-                 subPartitions.push({ code: remainingCodeChunk, type: 'UNKNOWN_STATEMENT' });
-            }
-            currentParsePos = advanceTo;
-        }
+      // Use the enhanced parser to get sophisticated block analysis
+      const enhancedPartitions = this.enhancedParser.parseWithContext(firstLevelSql, context);
+      
+      logger.info(`Enhanced parser identified ${enhancedPartitions.length} sub-blocks for ${parentBlockType}`);
+      
+      return enhancedPartitions;
+    } catch (error) {
+      logger.error('Error in enhanced second-level partitioning:', error);
+      
+      // Fallback to simple parsing if enhanced parsing fails
+      return this.fallbackSimplePartitioning(firstLevelSql, parentBlockType);
     }
+  }
 
-    return subPartitions.filter(p => p.code.length > 0);
+  private extractVariables(sql: string): string[] {
+    const variables = new Set<string>();
+    const variablePattern = /@\w+/g;
+    let match;
+    
+    while ((match = variablePattern.exec(sql)) !== null) {
+      variables.add(match[0]);
+    }
+    
+    return Array.from(variables);
+  }
+
+  private extractTables(sql: string): string[] {
+    const tables = new Set<string>();
+    const upperSql = sql.toUpperCase();
+    
+    // Simple table extraction patterns
+    const tablePatterns = [
+      /FROM\s+(\w+)/g,
+      /JOIN\s+(\w+)/g,
+      /UPDATE\s+(\w+)/g,
+      /INSERT\s+INTO\s+(\w+)/g,
+      /DELETE\s+FROM\s+(\w+)/g
+    ];
+    
+    tablePatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(upperSql)) !== null) {
+        if (match[1] && !['SELECT', 'FROM', 'WHERE'].includes(match[1])) {
+          tables.add(match[1].toLowerCase());
+        }
+      }
+    });
+    
+    return Array.from(tables);
+  }
+
+  private fallbackSimplePartitioning(firstLevelSql: string, parentBlockType: string): SharedSecondLevelPartition[] {
+    // Simple fallback implementation for backward compatibility
+    const simpleBlocks: SharedSecondLevelPartition[] = [];
+    const lines = firstLevelSql.split('\n');
+    
+    let currentBlock = '';
+    let blockStart = 1;
+    let executionOrder = 0;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (line.length === 0 || line.startsWith('--')) continue;
+      
+      currentBlock += (currentBlock ? '\n' : '') + lines[i];
+      
+      // Simple block termination detection
+      if (line.endsWith(';') || 
+          line.toUpperCase().includes('END') ||
+          i === lines.length - 1) {
+        
+        if (currentBlock.trim()) {
+          simpleBlocks.push({
+            code: currentBlock.trim(),
+            type: BlockType.BUSINESS_LOGIC,
+            startLine: blockStart,
+            endLine: i + 1,
+            summary: null,
+            detailedExplanation: null,
+            
+            // Enhanced fields with basic values
+            blockTitle: 'SQL Block',
+            blockSqlSnippet: currentBlock.trim(),
+            blockExplanation: 'SQL code block requiring analysis',
+            blockComplexity: 'moderate',
+            blockDependencies: [],
+            blockLineStart: blockStart,
+            blockLineEnd: i + 1,
+            
+            tableInfo: null,
+            logicalFlowSteps: null,
+            
+            parentBlockContext: parentBlockType,
+            executionOrder: ++executionOrder,
+            hasNestedBlocks: false,
+            businessPurpose: undefined
+          });
+        }
+        
+        currentBlock = '';
+        blockStart = i + 2;
+      }
+    }
+    
+    return simpleBlocks;
   }
 
   /**

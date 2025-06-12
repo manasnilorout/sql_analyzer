@@ -217,13 +217,32 @@ export interface SharedExplainSqlBlockOutput {
 
 // Definition for Second-Level Partitions
 export interface SharedSecondLevelPartition {
+  // Existing fields
   code: string;
-  type: string;
+  type: BlockType;
   startLine?: number;
   endLine?: number;
   summary?: SharedSummarizeCodeBlockOutput | null;
   detailedExplanation?: SharedExplainSqlBlockOutput | null;
-  // tableInfo and logicalFlowSteps are not planned for second-level in this iteration
+  
+  // New required fields
+  blockTitle: string;
+  blockSqlSnippet: string;
+  blockExplanation: string;
+  blockComplexity: 'simple' | 'moderate' | 'complex';
+  blockDependencies: string[];
+  blockLineStart: number;
+  blockLineEnd: number;
+  
+  // New optional fields for enhanced analysis
+  tableInfo?: SharedExtractTableInfoOutput | null;
+  logicalFlowSteps?: SharedGenerateSqlLogicalFlowOutput | null;
+  
+  // New metadata fields
+  parentBlockContext?: string;
+  executionOrder: number;
+  hasNestedBlocks: boolean;
+  businessPurpose?: string;
 }
 
 export interface SingleAnalysisResult {
@@ -257,7 +276,20 @@ export interface AnalysisRequest {
   sqlCode: string;
   blockType: string;
   model?: LlmModel; // This was for the old /analyze endpoint, might be deprecated or repurposed.
-  llmProvider?: string; // Added for provider selection e.g. 'openai', 'google-generic', 'vertexai'
+}
+
+// Enhanced Block Types for Second-Level Analysis
+export enum BlockType {
+  DECLARATION = 'declaration',
+  INITIALIZATION = 'initialization',
+  BUSINESS_LOGIC = 'business_logic',
+  TRANSACTION = 'transaction',
+  LOOP = 'loop',
+  CONDITIONAL = 'conditional',
+  ERROR_HANDLING = 'error_handling',
+  DATA_OPERATION = 'data_operation',
+  CALCULATION = 'calculation',
+  CLEANUP = 'cleanup'
 }
 
 export interface ReportGenerationRequest {

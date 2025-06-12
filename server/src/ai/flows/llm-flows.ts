@@ -55,7 +55,8 @@ const SYSTEM_PROMPTS = {
             "id": "string",
             "title": "string",
             "description": "string",
-            "sqlReference": "string"
+            "sqlReference": "string",
+            "type": "string" // One of "'DataRetrieval' | 'Filtering' | 'Joining' | 'Transformation' | 'Aggregation' | 'Sorting' | 'Modification' | 'CTEInitialization' | 'CTEConsumption' | 'SubqueryExecution' | 'SetOperation' | 'WindowFunction' | 'ConditionalLogic' | 'VariableAssignment' | 'Output' | 'Other'"
         }>
     }`,
 
@@ -86,10 +87,8 @@ function createLlmRequest(
 }
 
 // Helper function to validate and parse LLM response
-import { logger } from '../../utils/logger'; // Assuming logger is exported from here or createLogger is used. Let's use an existing pattern.
-// If createLogger is the export:
-// import { createLogger } from '../../utils/logger';
-// const logger = createLogger(); // Initialize logger if createLogger pattern is used
+import { createLogger } from '../../utils/logger';
+const logger = createLogger();
 
 // Exporting this as it's used by AnalysisService
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
@@ -147,11 +146,11 @@ export async function validateAndParseResponse<T>(response: string, schema: z.Zo
     // Ensure the result of aggressive stripping is trimmed one last time.
     processedResponse = processedResponse.trim();
 
-    console.log("Attempting to parse JSON from aggressively cleaned string (first 500 chars):", processedResponse.substring(0, 500));
-    if(processedResponse.length === 0) {
-        logger.error("Processed response is empty after stripping. Original response (first 100 chars): " + response.substring(0,100) + "...");
-        throw new Error("Processed response is empty after stripping attempts. Cannot parse empty string as JSON.");
-    }
+    // console.log("Attempting to parse JSON from aggressively cleaned string (first 500 chars):", processedResponse.substring(0, 500));
+    // if(processedResponse.length === 0) {
+    //     logger.error("Processed response is empty after stripping. Original response (first 100 chars): " + response.substring(0,100) + "...");
+    //     throw new Error("Processed response is empty after stripping attempts. Cannot parse empty string as JSON.");
+    // }
 
 
     try {
