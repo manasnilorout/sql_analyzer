@@ -28,7 +28,7 @@ const CoreConceptSchema = z.object({
   codeExample: z.string().optional().describe('A very short (1-2 lines), relevant snippet from the provided SQL code that clearly illustrates this concept. If no concise example can be extracted, omit this field.')
 });
 
-const SummarizeCodeBlockOutputSchema = z.object({
+export const SummarizeCodeBlockOutputSchema = z.object({ // Added export
   mainPurpose: z.string().describe('A clear, concise statement (1-2 sentences) of the overall goal of this SQL {{{blockType}}}. What problem does it solve or what task does it perform?'),
   keyOperations: z.array(z.string()).describe('A bullet-point list of 3-5 primary actions or steps the code performs (e.g., "Filters data based on specific criteria", "Aggregates sales totals by product category", "Updates customer records with new information").'),
   dataFlow: z.string().describe('A brief explanation (1-2 sentences) of where the data primarily comes from and where it goes, or what it transforms into. (e.g., "Reads from `orders` and `products` tables, calculates total sales per product, and outputs a summarized result.").'),

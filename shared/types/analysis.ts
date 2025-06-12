@@ -153,6 +153,52 @@ export interface SharedCodeQualitySuggestions {
   suggestions?: SharedCodeQualitySuggestion[];
 }
 
+// --- Types for Table Info ---
+// Based on IdentifiedTableSchema from extract-table-info.ts
+export interface SharedIdentifiedTable {
+  name: string;
+  primaryRole: "Source" | "Target" | "SourceAndTarget" | "Mentioned";
+  roleDescription: string;
+  operations: string[];
+}
+
+// Based on ExtractTableInfoOutputSchema from extract-table-info.ts
+export interface SharedExtractTableInfoOutput {
+  identifiedTables: SharedIdentifiedTable[];
+}
+
+// --- Types for Logical Flow ---
+// Based on LogicalStepSchema from generate-sql-logical-flow.ts
+export interface SharedLogicalStep {
+  id?: string;
+  title?: string;
+  description: string;
+  sqlReference?: string;
+  type:
+    | "DataRetrieval"
+    | "Filtering"
+    | "Joining"
+    | "Transformation"
+    | "Aggregation"
+    | "Sorting"
+    | "Modification"
+    | "CTEInitialization"
+    | "CTEConsumption"
+    | "SubqueryExecution"
+    | "SetOperation"
+    | "WindowFunction"
+    | "ConditionalLogic"
+    | "VariableAssignment"
+    | "Output"
+    | "Other";
+}
+
+// Based on GenerateSqlLogicalFlowOutputSchema from generate-sql-logical-flow.ts
+export interface SharedGenerateSqlLogicalFlowOutput {
+  flowSteps: SharedLogicalStep[];
+}
+
+
 // Based on ExplainSqlBlockOutputSchema in explain-logic-rules.ts
 export interface SharedExplainSqlBlockOutput {
   chunkKeySummary?: string;
@@ -183,8 +229,8 @@ export interface SharedSecondLevelPartition {
 export interface SingleAnalysisResult {
   summary: SharedSummarizeCodeBlockOutput | null;
   detailedExplanation: SharedExplainSqlBlockOutput | null;
-  tableInfo: any; // ExtractTableInfoOutput - kept as any for now
-  logicalFlowSteps: any; // GenerateSqlLogicalFlowOutput - kept as any for now
+  tableInfo: SharedExtractTableInfoOutput | null;
+  logicalFlowSteps: SharedGenerateSqlLogicalFlowOutput | null;
   rawCode: string;
   blockType: string; // This is the blockType of the first-level partition
   chunkNumber: number;
@@ -202,14 +248,16 @@ export interface AnalysisError {
   error: string;
   details?: string;
   chunkNumber?: number;
+  totalChunks?: number; // Added field
 }
 
-export type LlmModel = 'gemini' | 'openai';
+export type LlmModel = 'gemini' | 'openai'; // This type might be related to the old /analyze endpoint's 'model' param
 
 export interface AnalysisRequest {
   sqlCode: string;
   blockType: string;
-  model?: LlmModel;
+  model?: LlmModel; // This was for the old /analyze endpoint, might be deprecated or repurposed.
+  llmProvider?: string; // Added for provider selection e.g. 'openai', 'google-generic', 'vertexai'
 }
 
 export interface ReportGenerationRequest {

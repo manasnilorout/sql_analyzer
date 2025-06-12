@@ -46,7 +46,7 @@ const GenerateSqlLogicalFlowInputSchema = z.object({
 });
 export type GenerateSqlLogicalFlowInput = z.infer<typeof GenerateSqlLogicalFlowInputSchema>;
 
-const GenerateSqlLogicalFlowOutputSchema = z.object({
+export const GenerateSqlLogicalFlowOutputSchema = z.object({ // Added export
   flowSteps: z.array(LogicalStepSchema).describe("An array of logical steps representing the SQL code's flow. The order of steps in the array should strictly correspond to the logical execution order or top-to-bottom reading of the SQL code. If the SQL contains multiple independent statements (e.g., in a script), represent them as a continuous sequence of steps in this single array, clearly delineating them if possible via step titles or descriptions."),
 });
 export type GenerateSqlLogicalFlowOutput = z.infer<typeof GenerateSqlLogicalFlowOutputSchema>;

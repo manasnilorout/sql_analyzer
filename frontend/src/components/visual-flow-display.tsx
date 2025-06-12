@@ -2,7 +2,7 @@
 // src/components/visual-flow-display.tsx
 "use client";
 
-import type { GenerateSqlLogicalFlowOutput, LogicalStep } from "@/ai/flows/generate-sql-logical-flow";
+import type { SharedGenerateSqlLogicalFlowOutput as GenerateSqlLogicalFlowOutput, SharedLogicalStep as LogicalStep } from '@shared/types/analysis'; // Use Shared types
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CodeBlock } from "@/components/code-block";

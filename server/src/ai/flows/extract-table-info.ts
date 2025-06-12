@@ -29,7 +29,7 @@ const ExtractTableInfoInputSchema = z.object({
 });
 export type ExtractTableInfoInput = z.infer<typeof ExtractTableInfoInputSchema>;
 
-const ExtractTableInfoOutputSchema = z.object({
+export const ExtractTableInfoOutputSchema = z.object({ // Added export
   identifiedTables: z.array(IdentifiedTableSchema).describe('A comprehensive list of all unique tables identified in the SQL code, with their roles and operations.'),
 });
 export type ExtractTableInfoOutput = z.infer<typeof ExtractTableInfoOutputSchema>;

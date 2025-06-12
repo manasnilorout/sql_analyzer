@@ -158,7 +158,7 @@ const CodeQualitySuggestionsSchema = z.object({
 });
 
 // --- Main Output Schema ---
-const ExplainSqlBlockOutputSchema = z.object({
+export const ExplainSqlBlockOutputSchema = z.object({ // Added export
   chunkKeySummary: z.string().optional().describe("A 2-3 sentence high-level summary specifically for the current SQL chunk/block being analyzed, providing immediate context before diving into details."),
   blockSummary: BlockSummarySchema.describe("High-level summary of the primary SQL block analyzed, including any input parameters and function return types."),
   proceduralControlFlow: z.array(ProceduralStepSchema).optional().describe("For Stored Procedures or SQL Scripts with procedural logic, this lists these steps sequentially."),

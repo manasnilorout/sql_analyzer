@@ -16,7 +16,7 @@ const SummarizeEntireScriptInputSchema = z.object({
 });
 export type SummarizeEntireScriptInput = z.infer<typeof SummarizeEntireScriptInputSchema>;
 
-const SummarizeEntireScriptOutputSchema = z.object({
+export const SummarizeEntireScriptOutputSchema = z.object({ // Added export
   overallSummary: z.string().describe('A high-level summary of the entire SQL script, outlining its main purpose, key operations, and general data flow.'),
 });
 export type SummarizeEntireScriptOutput = z.infer<typeof SummarizeEntireScriptOutputSchema>;

@@ -1,6 +1,7 @@
 import { AbstractLlmImpl, LlmRequest, LlmResponse } from './AbstractLlmImpl';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, GenerationConfig, Content } from '@google/generative-ai';
-import { logger } from '../../utils/logger'; // Assuming a logger utility
+import { createLogger } from '../../utils/logger';
+const logger = createLogger();
 
 // Default values for Google AI (Gemini via SDK)
 const GOOGLE_GENAI_DEFAULT_MODEL = 'gemini-1.5-flash-latest'; // Or 'gemini-pro' etc.
@@ -152,13 +153,10 @@ export class GoogleGenericLlmImpl extends AbstractLlmImpl {
                     model: modelName,
                     finishReason: response.candidates?.[0]?.finishReason,
                     safetyRatings: response.promptFeedback?.safetyRatings,
-                    // Usage metadata (token count) for Gemini API via this SDK is often part of the 'response' object directly
-                    // or sometimes within `promptFeedback` or `candidates` depending on exact API & version.
-                    // The SDK typically aggregates this. Let's assume `response.usageMetadata` or similar if available.
-                    // For `generateContent`, totalToken is often found in `response.candidates[0].tokenCount`.
-                    // If not directly available, it might need to be calculated or might be part of a different logging mechanism.
-                    tokenCount: response.candidates?.[0]?.tokenCount, // Example, might need adjustment
-                    totalTokens: response.candidates?.[0]?.tokenCount, // Approximation if only candidate token count is available
+                    // Access usageMetadata from the main response object for token counts
+                    promptTokenCount: response.usageMetadata?.promptTokenCount,
+                    candidatesTokenCount: response.usageMetadata?.candidatesTokenCount,
+                    totalTokenCount: response.usageMetadata?.totalTokenCount,
                 },
             };
 

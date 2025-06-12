@@ -1,6 +1,13 @@
 
 // src/lib/report-generator.ts
-import type { SingleAnalysisResult, FullAnalysisPayload } from "@/app/actions/analysis-actions";
+import type {
+  SingleAnalysisResult,
+  FullAnalysisPayload,
+  SharedSummarizeCodeBlockOutput as SummarizeCodeBlockOutput, // Use shared types
+  SharedExplainSqlBlockOutput as ExplainSqlBlockOutput, // Use shared types
+  SharedIdentifiedTable as IdentifiedTable, // Use shared types
+  SharedLogicalStep as LogicalStep // Use shared types
+} from "@shared/types/analysis"; // Corrected path
 
 const escapeHtml = (text: string | undefined): string => {
   if (text === undefined || text === null) return 'N/A';

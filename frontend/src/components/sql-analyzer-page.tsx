@@ -26,10 +26,15 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { CodeBlock } from "@/components/code-block";
 import { ApiClient, ApiError } from "@/lib/api-client";
-import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@shared/types/analysis";
+import type {
+  FullAnalysisPayload,
+  AnalysisError,
+  SingleAnalysisResult,
+  SharedExtractTableInfoOutput as ExtractTableInfoOutput, // Use Shared type
+  SharedIdentifiedTable as IdentifiedTable // Use Shared type
+} from "@shared/types/analysis";
 // Removed SummarizeCodeBlockOutput and ExplainSqlBlockOutput direct imports as they are now used via Shared types
 // import type { ExplainSqlBlockOutput } from "@/ai/flows/explain-logic-rules"; // Now SharedExplainSqlBlockOutput
-import type { ExtractTableInfoOutput, IdentifiedTable } from "@/ai/flows/extract-table-info";
 // import type { SummarizeCodeBlockOutput } from "@/ai/flows/summarize-code-block"; // Now SharedSummarizeCodeBlockOutput
 import { APP_TITLE, BLOCK_TYPES, BlockTypeValue, COMPANY_NAME } from "@shared/constants";
 import {
@@ -206,7 +211,12 @@ const SidebarNavItem: React.FC<SidebarNavItemProps> = ({ view, currentView, setV
   </Button>
 );
 
-const UnifiedTableDisplay: React.FC<{ tableInfo: ExtractTableInfoOutput | undefined }> = ({ tableInfo }) => {
+// Update UnifiedTableDisplayProps to accept null for tableInfo
+interface UnifiedTableDisplayProps {
+  tableInfo: ExtractTableInfoOutput | null | undefined;
+}
+
+const UnifiedTableDisplay: React.FC<UnifiedTableDisplayProps> = ({ tableInfo }) => {
   if (!tableInfo || !tableInfo.identifiedTables || tableInfo.identifiedTables.length === 0) {
     return (
       <Card className="border-border/40 shadow bg-card">
@@ -763,5 +773,3 @@ export default function SqlAnalyzerPage() {
     </div>
   );
 }
-=======
->>>>>>> REPLACE

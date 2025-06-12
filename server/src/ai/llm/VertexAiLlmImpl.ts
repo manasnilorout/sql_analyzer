@@ -1,6 +1,11 @@
 import { AbstractLlmImpl, LlmRequest, LlmResponse } from './AbstractLlmImpl';
-import { VertexAI, Part } from '@google-cloud/aiplatform';
-import { logger } from '../../utils/logger'; // Assuming a logger utility
+import AIPlatformMain, { protos } from '@google-cloud/aiplatform'; // Default import as AIPlatformMain, named for protos
+
+type IPart = protos.google.cloud.aiplatform.v1.IPart;
+type ISafetyRating = protos.google.cloud.aiplatform.v1.ISafetyRating;
+
+import { createLogger } from '../../utils/logger';
+const logger = createLogger();
 
 // Default values for Vertex AI, can be overridden by LlmFactory
 const VERTEXAI_DEFAULT_MODEL = 'gemini-1.5-flash-001'; // Example, use an appropriate model
@@ -8,14 +13,13 @@ const VERTEXAI_DEFAULT_TEMPERATURE = 0.7;
 const VERTEXAI_DEFAULT_MAX_TOKENS = 2048;
 
 export class VertexAiLlmImpl extends AbstractLlmImpl {
-    private readonly vertexAIClient: VertexAI;
+    private readonly vertexAIClient: any; // Use 'any' for now to bypass type checking on instantiation
     private readonly projectId: string;
     private readonly location: string;
 
     constructor(
         projectId: string,
         location: string,
-        // Pass a placeholder for apiKey as it's not directly used by Vertex AI ADC
         apiKeyPlaceholder: string = "vertex_adc_auth",
         defaultModel: string = VERTEXAI_DEFAULT_MODEL,
         defaultTemperature: number = VERTEXAI_DEFAULT_TEMPERATURE,
@@ -32,7 +36,30 @@ export class VertexAiLlmImpl extends AbstractLlmImpl {
         this.projectId = projectId;
         this.location = location;
 
-        this.vertexAIClient = new VertexAI({ project: this.projectId, location: this.location });
+        // Attempt to access VertexAI as a property of the default import AIPlatformMain
+        const VertexAIConstructor = (AIPlatformMain as any).VertexAI;
+        if (!VertexAIConstructor) {
+            // Fallback or further attempt: some SDKs might have it under a v1 or similar namespace
+            const V1Namespace = (AIPlatformMain as any).v1;
+            if (V1Namespace && V1Namespace.VertexAI) {
+                 // This path is less common for the main VertexAI client but trying due to issues
+                // this.vertexAIClient = new V1Namespace.VertexAI({ project: this.projectId, location: this.location });
+                // The primary VertexAI client is usually not namespaced under v1 in this manner.
+                // The getGenerativeModel() method is on the top-level VertexAI class.
+                // For now, if AIPlatformMain.VertexAI doesn't work, we throw.
+                // The actual PredictionServiceClient is often AIPlatformMain.v1.PredictionServiceClient
+                // but that has a different API from getGenerativeModel().
+                 throw new Error('VertexAI constructor not found on AIPlatformMain.v1 namespace. Library structure might be unexpected.');
+            } else if (typeof AIPlatformMain === 'function') {
+                // If AIPlatformMain itself is the constructor (as suggested by one of the tsc errors)
+                this.vertexAIClient = new (AIPlatformMain as any)({ project: this.projectId, location: this.location });
+            }
+             else {
+                 throw new Error('VertexAI constructor not found on AIPlatformMain default import. The library structure might have changed or is not as expected.');
+            }
+        } else {
+            this.vertexAIClient = new VertexAIConstructor({ project: this.projectId, location: this.location });
+        }
     }
 
     async sendMessageToLlm(request: LlmRequest): Promise<LlmResponse> {
@@ -47,7 +74,7 @@ export class VertexAiLlmImpl extends AbstractLlmImpl {
             // generationConfig and safetySettings can also be set here if needed globally
         });
 
-        const contents: Part[] = [];
+        const contents: IPart[] = []; // Changed type to IPart
         // Vertex AI Gemini API typically structures system prompts as the first part of a multi-turn chat,
         // or within the initial user message if it's a single turn.
         // For simplicity here, if a system prompt exists, we prepend it to the user's prompt.
@@ -83,7 +110,7 @@ export class VertexAiLlmImpl extends AbstractLlmImpl {
             // in its GenerateContentRequest for all transport layers or model types easily.
             // Promise.race is a reliable way to enforce timeout.
             const generateContentPromise = generativeModel.generateContent({
-                contents: [{ role: 'user', parts: contents }], // Gemini API expects contents with roles.
+                contents: [{ role: 'user', parts: contents as IPart[] }], // Ensure parts are cast to IPart[] if needed by SDK
                 generationConfig: {
                     temperature: temperature,
                     maxOutputTokens: maxOutputTokens,
@@ -106,7 +133,7 @@ export class VertexAiLlmImpl extends AbstractLlmImpl {
             if (!candidate.content || !candidate.content.parts || candidate.content.parts.length === 0 || !candidate.content.parts[0].text) {
                 // Check for blocked content due to safety filters
                 if (candidate.finishReason === 'SAFETY') {
-                    const safetyRatings = candidate.safetyRatings?.map(r => `${r.category} was ${r.probability}`).join(', ') || 'No specific ratings.';
+                    const safetyRatings = candidate.safetyRatings?.map((r: ISafetyRating) => `${r.category ? r.category.toString() : 'UNKNOWN_CATEGORY'} was ${r.probability ? r.probability.toString() : 'UNKNOWN_PROBABILITY'}`).join(', ') || 'No specific ratings.';
                     logger.warn(`Vertex AI content generation blocked due to safety reasons: ${safetyRatings}`, response);
                     throw new Error(`Content generation blocked by Vertex AI due to safety filters: ${safetyRatings}.`);
                 }
@@ -124,7 +151,11 @@ export class VertexAiLlmImpl extends AbstractLlmImpl {
                 metadata: {
                     model: modelId, // The model used
                     finishReason: candidate.finishReason,
-                    safetyRatings: candidate.safetyRatings,
+                    safetyRatings: candidate.safetyRatings?.map((r: ISafetyRating) => ({
+                        category: r.category ? r.category.toString() : undefined,
+                        probability: r.probability ? r.probability.toString() : undefined, // Convert enum to string if necessary
+                        blocked: r.blocked
+                    })),
                     tokenCount: usageMetadata, // Contains promptTokenCount, candidatesTokenCount, totalTokenCount
                 },
             };

@@ -7,6 +7,7 @@ import type { SharedExplainSqlBlockOutput } from "@shared/types/analysis";
 // otherwise, we might need to define simplified local versions or rely on 'any' temporarily if too complex for this step.
 // For now, let's assume the key parts of SharedExplainSqlBlockOutput are available.
 
+import { cn } from "@/lib/utils"; // Added import for cn
 import {
   Card,
   CardContent,

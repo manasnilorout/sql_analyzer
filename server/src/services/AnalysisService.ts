@@ -1,9 +1,10 @@
 import type { FullAnalysisPayload, AnalysisError, SingleAnalysisResult } from "@shared/types/analysis";
 import { z } from 'genkit'; // Genkit's z import might still be used by schemas, or can be replaced by 'zod'
-import { LlmFactory } from '../ai/llm/LlmFactory';
+import { LlmFactory, LlmType } from '../ai/llm/LlmFactory'; // Import LlmType
 import { AbstractLlmImpl, LlmRequest, LlmResponse } from '../ai/llm/AbstractLlmImpl';
-import { SYSTEM_PROMPTS, validateAndParseResponse } from '../ai/flows/llm-flows'; // Assuming validateAndParseResponse is exported
-import { logger } from '../../utils/logger';
+import { SYSTEM_PROMPTS, validateAndParseResponse, analyzeWithLlm } from '../ai/flows/llm-flows'; // Added analyzeWithLlm
+import { createLogger } from '../utils/logger'; // Corrected path
+const logger = createLogger();
 
 // Import Zod Schemas and TypeScript types for outputs from their original flow files
 import { SummarizeCodeBlockOutputSchema, type SummarizeCodeBlockOutput } from '../ai/flows/summarize-code-block';
@@ -512,7 +513,7 @@ export class AnalysisService {
   async runAnalysis(
     fullSqlCode: string,
     blockType: string,
-    providerName?: LlmFactory.LlmType // Added LlmType from LlmFactory
+    providerName?: LlmType // Use imported LlmType directly
   ): Promise<FullAnalysisPayload | AnalysisError> {
     if (!fullSqlCode || fullSqlCode.trim() === "") {
       return { error: "SQL code cannot be empty." };
@@ -548,7 +549,7 @@ export class AnalysisService {
           this.retryMaxRetries,
           this.retryInitialDelayMs
         );
-        const summaryResult = await validateAndParseResponse(llmResponse.content, SummarizeEntireScriptOutputSchema);
+        const summaryResult = await validateAndParseResponse<SummarizeEntireScriptOutput>(llmResponse.content, SummarizeEntireScriptOutputSchema);
         overallScriptSummary = summaryResult.overallSummary;
       } catch (e: any) {
         logger.warn(`Could not generate overall script summary: ${e.message}`, e);
@@ -565,25 +566,26 @@ export class AnalysisService {
 
       try {
         // --- First-level analysis ---
+        // --- First-level analysis ---
         const summarizePrompt = `Analyze this SQL code block.\nBlock Type: ${chunkBlockTypeHint}\nPartition Level: first\nSQL Code:\n\`\`\`sql\n${currentChunkSql}\n\`\`\``;
         const summarizeLlmRequest: LlmRequest = { prompt: summarizePrompt, systemPrompt: SYSTEM_PROMPTS.summarizeCodeBlock };
         const summaryLlmResponse = await this.invokeLlmWithRetry(llm, summarizeLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-        const firstLevelSummary = await validateAndParseResponse(summaryLlmResponse.content, SummarizeCodeBlockOutputSchema);
+        const firstLevelSummary = await validateAndParseResponse<SummarizeCodeBlockOutput>(summaryLlmResponse.content, SummarizeCodeBlockOutputSchema);
 
         const explainPrompt = `Explain this SQL code block.\nBlock Type: ${chunkBlockTypeHint}\nPartition Level: first\nSQL Code:\n\`\`\`sql\n${currentChunkSql}\n\`\`\``;
         const explainLlmRequest: LlmRequest = { prompt: explainPrompt, systemPrompt: SYSTEM_PROMPTS.explainLogicRules };
         const explainLlmResponse = await this.invokeLlmWithRetry(llm, explainLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-        const firstLevelExplanation = await validateAndParseResponse(explainLlmResponse.content, ExplainSqlBlockOutputSchema);
+        const firstLevelExplanation = await validateAndParseResponse<ExplainSqlBlockOutput>(explainLlmResponse.content, ExplainSqlBlockOutputSchema);
 
         const tableInfoPrompt = `SQL Code:\n\`\`\`sql\n${currentChunkSql}\n\`\`\`\nBlock Type Hint: ${chunkBlockTypeHint}`;
         const tableInfoLlmRequest: LlmRequest = { prompt: tableInfoPrompt, systemPrompt: SYSTEM_PROMPTS.extractTableInfo };
         const tableInfoLlmResponse = await this.invokeLlmWithRetry(llm, tableInfoLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-        const tableInfoResult = await validateAndParseResponse(tableInfoLlmResponse.content, ExtractTableInfoOutputSchema);
+        const tableInfoResult = await validateAndParseResponse<ExtractTableInfoOutput>(tableInfoLlmResponse.content, ExtractTableInfoOutputSchema);
 
         const logicalFlowPrompt = `SQL Code:\n\`\`\`sql\n${currentChunkSql}\n\`\`\`\nBlock Type Hint: ${chunkBlockTypeHint}`;
         const logicalFlowLlmRequest: LlmRequest = { prompt: logicalFlowPrompt, systemPrompt: SYSTEM_PROMPTS.generateSqlLogicalFlow };
         const logicalFlowLlmResponse = await this.invokeLlmWithRetry(llm, logicalFlowLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-        const logicalFlowResult = await validateAndParseResponse(logicalFlowLlmResponse.content, GenerateSqlLogicalFlowOutputSchema);
+        const logicalFlowResult = await validateAndParseResponse<GenerateSqlLogicalFlowOutput>(logicalFlowLlmResponse.content, GenerateSqlLogicalFlowOutputSchema);
 
         // --- Second-level analysis ---
         for (const subPartition of secondLevelPartitions) {
@@ -593,7 +595,7 @@ export class AnalysisService {
             const subSummarizePrompt = `Analyze this SQL sub-block.\nParent Block Type: ${chunkBlockTypeHint}\nSub-Block Type: ${subPartition.type}\nPartition Level: second\nSQL Code:\n\`\`\`sql\n${subPartition.code}\n\`\`\``;
             const subSummarizeLlmRequest: LlmRequest = { prompt: subSummarizePrompt, systemPrompt: SYSTEM_PROMPTS.summarizeCodeBlock };
             const subSummaryLlmResponse = await this.invokeLlmWithRetry(llm, subSummarizeLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-            subPartition.summary = await validateAndParseResponse(subSummaryLlmResponse.content, SummarizeCodeBlockOutputSchema);
+            subPartition.summary = await validateAndParseResponse<SummarizeCodeBlockOutput>(subSummaryLlmResponse.content, SummarizeCodeBlockOutputSchema);
           } catch (subError: any) {
             logger.error(`Error summarizing sub-partition (type: ${subPartition.type}): ${subError.message}`, subError);
           }
@@ -602,7 +604,7 @@ export class AnalysisService {
             const subExplainPrompt = `Explain this SQL sub-block.\nParent Block Type: ${chunkBlockTypeHint}\nSub-Block Type: ${subPartition.type}\nPartition Level: second\nSQL Code:\n\`\`\`sql\n${subPartition.code}\n\`\`\``;
             const subExplainLlmRequest: LlmRequest = { prompt: subExplainPrompt, systemPrompt: SYSTEM_PROMPTS.explainLogicRules };
             const subExplainLlmResponse = await this.invokeLlmWithRetry(llm, subExplainLlmRequest, this.retryMaxRetries, this.retryInitialDelayMs);
-            subPartition.detailedExplanation = await validateAndParseResponse(subExplainLlmResponse.content, ExplainSqlBlockOutputSchema);
+            subPartition.detailedExplanation = await validateAndParseResponse<ExplainSqlBlockOutput>(subExplainLlmResponse.content, ExplainSqlBlockOutputSchema);
           } catch (subError: any) {
             logger.error(`Error explaining sub-partition (type: ${subPartition.type}): ${subError.message}`, subError);
           }
@@ -697,22 +699,19 @@ export class AnalysisService {
       // These schemas are now imported at the top of the file.
       // This method is NOT being refactored to use this.llmInstance in this pass.
       const codeBlockSchema = SummarizeCodeBlockOutputSchema;
-        mainPurpose: z.string(),
-        keyOperations: z.array(z.string()),
-        dataFlow: z.string(),
-        coreSqlConcepts: z.array(z.object({
-          concept: z.string(),
-          explanation: z.string(),
-          codeExample: z.string().optional()
-        })),
-        businessLogicInsights: z.array(z.string()),
-        beginnerFriendlyTips: z.array(z.string())
-      });
+      // Removed erroneous object literal for codeBlockSchema
 
       const logicRulesSchema = ExplainSqlBlockOutputSchema;
+      // Removed erroneous object literal for logicRulesSchema
+
       const tableInfoSchema = ExtractTableInfoOutputSchema;
+      // Removed erroneous object literal for tableInfoSchema
+
       const logicalFlowSchema = GenerateSqlLogicalFlowOutputSchema;
+      // Removed erroneous object literal for logicalFlowSchema
+
       const scriptSummarySchema = SummarizeEntireScriptOutputSchema;
+      // Removed erroneous object literal for scriptSummarySchema
 
       // This part still uses analyzeWithLlm, which internally uses the LlmFactory with 'gemini' or 'openai'.
       // This is distinct from the main refactoring of runAnalysis which now uses 'google-generic' via this.llmInstance.
