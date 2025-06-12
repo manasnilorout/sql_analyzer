@@ -92,29 +92,65 @@ import { logger } from '../../utils/logger'; // Assuming logger is exported from
 
 // Exporting this as it's used by AnalysisService
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
-    let processedResponse = response.trim();
-
-    // Attempt 1: Regex with Case-Insensitive 'json' and Flexible Whitespace.
-    const markdownJsonRegex = new RegExp(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/, "i");
-    const match = processedResponse.match(markdownJsonRegex);
-
-    if (match && match[1]) {
-        processedResponse = match[1].trim();
-    } else {
-      // Attempt 2: Fallback for Simple Triple Backticks (if regex didn't change the string or it still looks fenced).
-      // This check is now more meaningful if the regex above didn't match.
-      if (processedResponse.startsWith("```") && processedResponse.endsWith("```")) {
-          processedResponse = processedResponse.substring(3, processedResponse.length - 3).trim();
-      }
+    // Detailed Initial Logging
+    // Using console.log for direct visibility as logger might not be configured for debug in all environments
+    console.log("Original response for parsing (first 30 chars with codes):");
+    for (let i = 0; i < Math.min(response.length, 30); i++) {
+        console.log(`'${response[i]}' (Code: ${response.charCodeAt(i)})`);
     }
-    // Note: The original Layer 3 (forgivingRegex if !looksLikeJson) from the prompt might be too aggressive
-    // or redundant if the above two layers are effective.
-    // The current regex is already quite forgiving for the outer fences.
-    // Simpler prefix/suffix checks are now primary, with the regex as the first attempt.
+    if (response.length > 30) console.log("...");
 
-    // Debug logging
-    // logger.debug(`Attempting to parse JSON from cleaned string: [${processedResponse}]`);
-    console.log("Attempting to parse JSON from cleaned string (first 500 chars):", processedResponse.substring(0, 500));
+    let processedResponse = response; // Start with the raw response for brace/bracket finding
+
+    const firstBrace = processedResponse.indexOf('{');
+    const lastBrace = processedResponse.lastIndexOf('}');
+    const firstBracket = processedResponse.indexOf('[');
+    const lastBracket = processedResponse.lastIndexOf(']');
+
+    if (firstBrace !== -1 && lastBrace !== -1 && firstBrace < lastBrace) {
+        // Potential JSON object found
+        // Check if this object is likely the primary content vs. an array of objects
+        if (firstBracket === -1 || (firstBracket !== -1 && firstBrace < firstBracket)) {
+            // '{...}' is likely the main structure
+            processedResponse = processedResponse.substring(firstBrace, lastBrace + 1);
+        } else if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < firstBrace) {
+            // '[...{...}...]'. This is an array containing objects.
+            // The initial brace/bracket logic might be too simple for this.
+            // Let's try to grab the array if it seems to be the outermost structure.
+             processedResponse = processedResponse.substring(firstBracket, lastBracket + 1);
+        }
+        // If both are present and it's unclear, the fallback regex might be better.
+        // For now, this prioritizes object if it starts first, then array if it starts first.
+
+    } else if (firstBracket !== -1 && lastBracket !== -1 && firstBracket < lastBracket) {
+        // Potential JSON array found, and no object was found or object was nested
+        processedResponse = processedResponse.substring(firstBracket, lastBracket + 1);
+    } else {
+        // Fallback: if no clear JSON object/array structure is found by braces/brackets,
+        // or if the above logic was insufficient (e.g. array of objects starting with '[' before first '{')
+        // use the regex approach on the original trimmed string.
+        let trimmedOriginal = response.trim();
+        const markdownJsonRegex = new RegExp(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/, "i");
+        const match = trimmedOriginal.match(markdownJsonRegex);
+        if (match && match[1]) {
+            processedResponse = match[1].trim();
+        } else if (trimmedOriginal.startsWith("```") && trimmedOriginal.endsWith("```")) {
+            // Fallback if regex fails but basic fences are there
+            processedResponse = trimmedOriginal.substring(3, trimmedOriginal.length - 3).trim();
+        } else {
+            // If nothing else worked, use the (already initialized) trimmed original string and hope for the best
+            processedResponse = trimmedOriginal; // Ensure it's at least trimmed
+        }
+    }
+
+    // Ensure the result of aggressive stripping is trimmed one last time.
+    processedResponse = processedResponse.trim();
+
+    console.log("Attempting to parse JSON from aggressively cleaned string (first 500 chars):", processedResponse.substring(0, 500));
+    if(processedResponse.length === 0) {
+        logger.error("Processed response is empty after stripping. Original response (first 100 chars): " + response.substring(0,100) + "...");
+        throw new Error("Processed response is empty after stripping attempts. Cannot parse empty string as JSON.");
+    }
 
 
     try {
