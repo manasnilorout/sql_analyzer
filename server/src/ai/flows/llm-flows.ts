@@ -34,7 +34,8 @@ const SYSTEM_PROMPTS = {
             "joinsWithTargetTableExplanation": "string",
             "conditions": Array<{joinType: string, tablesInvolved: string, onCondition: string, purpose: string}>
         }
-    }`,
+    }
+    IMPORTANT: Ensure the entire output is a single, valid JSON object. Double-check all JSON syntax, especially for correct placement of commas within objects and arrays, and ensure all brackets \`[]\` and braces \`{}\` are correctly opened and closed. All string values must be properly escaped where necessary.`,
 
     extractTableInfo: `You are an expert SQL analyst. Extract and analyze all table-related information from the SQL code.
     Format your response as a JSON object with the following structure:
