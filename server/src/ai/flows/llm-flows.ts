@@ -94,21 +94,28 @@ import { logger } from '../../utils/logger'; // Assuming logger is exported from
 export async function validateAndParseResponse<T>(response: string, schema: z.ZodType<T>): Promise<T> {
     let processedResponse = response.trim();
 
-    // Simplified robust regex approach
-    const markdownJsonRegex = /^```(?:json)?\s*([\s\S]*?)\s*```$/;
+    // Attempt 1: Regex with Case-Insensitive 'json' and Flexible Whitespace.
+    const markdownJsonRegex = new RegExp(/^\s*```(?:json)?\s*([\s\S]*?)\s*```\s*$/, "i");
     const match = processedResponse.match(markdownJsonRegex);
 
     if (match && match[1]) {
         processedResponse = match[1].trim();
+    } else {
+      // Attempt 2: Fallback for Simple Triple Backticks (if regex didn't change the string or it still looks fenced).
+      // This check is now more meaningful if the regex above didn't match.
+      if (processedResponse.startsWith("```") && processedResponse.endsWith("```")) {
+          processedResponse = processedResponse.substring(3, processedResponse.length - 3).trim();
+      }
     }
-    // No more layered string prefix/suffix checks after this regex.
-    // The regex is designed to handle the common cases including ```json ... ``` and ``` ... ```.
+    // Note: The original Layer 3 (forgivingRegex if !looksLikeJson) from the prompt might be too aggressive
+    // or redundant if the above two layers are effective.
+    // The current regex is already quite forgiving for the outer fences.
+    // Simpler prefix/suffix checks are now primary, with the regex as the first attempt.
 
-    // Debug logging to see the exact string before parsing
-    // Using console.log for direct visibility in this tool's output if logger isn't configured for debug in CI
-    console.log("Attempting to parse JSON from cleaned string (first 500 chars):", processedResponse.substring(0, 500));
-    // Or use logger if available and configured:
+    // Debug logging
     // logger.debug(`Attempting to parse JSON from cleaned string: [${processedResponse}]`);
+    console.log("Attempting to parse JSON from cleaned string (first 500 chars):", processedResponse.substring(0, 500));
+
 
     try {
         const parsed = JSON.parse(processedResponse);
